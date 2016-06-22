@@ -3,7 +3,7 @@ package main
 import (
 	"sort"
 
-	"./client/go/formosa"
+	"github.com/matishsiao/formosa/client/go/formosa"
 )
 
 type Configs struct {
