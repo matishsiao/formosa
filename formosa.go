@@ -17,6 +17,7 @@ var (
 	CONFIGS      Configs
 	modTime      time.Time
 	GlobalClient ServerClient
+	DM           DBManager
 	memprofile   string = "mempprof.log"
 	memFile      *os.File
 )
@@ -39,9 +40,10 @@ func main() {
 		useCPU = 1
 	}
 	runtime.GOMAXPROCS(useCPU)
+	DM.Construct()
 	//Pprof testing
 	//go memPorfile()
-	GlobalClient.Init()
+	//GlobalClient.Init()
 	go Listen(CONFIGS.Host, CONFIGS.Port)
 	go WebServer()
 	timeCounter := 0

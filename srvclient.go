@@ -15,8 +15,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"./client/go/formosa"
 )
 
 //Service Client for Proxy
@@ -26,7 +24,6 @@ type SrvClient struct {
 	RemoteAddr  string
 	RequestTime int64
 	recvBuf     bytes.Buffer
-	DBNodes     []*DBNode
 	Auth        bool
 	Zip         bool
 	TmpResult   []string
@@ -41,9 +38,6 @@ func (cl *SrvClient) Init(conn *net.TCPConn) {
 		cl.Auth = true
 	}
 	cl.RemoteAddr = strings.Split(cl.Conn.RemoteAddr().String(), ":")[0]
-	/*cl.MirrorClient = ServerClient{Mutex:&sync.Mutex{}}
-	cl.MirrorClient.ArgsChannel = make(chan []string)*/
-	cl.CheckDBNodes()
 	go cl.HealthCheck()
 	cl.Read()
 	//PrintGCSummary()
@@ -55,14 +49,6 @@ func (cl *SrvClient) Close() {
 	cl.Conn.Close()
 	cl.Connected = false
 	cl.Auth = false
-	for _, v := range cl.DBNodes {
-		v.Client.Close()
-	}
-	if CONFIGS.Debug {
-		log.Println("Close Service Connection by Timeout:", cl.Conn.RemoteAddr(), "Close DB Connections:", len(cl.DBNodes))
-	}
-	//cl.MirrorClient.Close()
-	cl.DBNodes = nil
 	cl.mu.Unlock()
 	ProxyConn--
 	if ProxyConn <= 0 {
@@ -135,44 +121,38 @@ func (cl *SrvClient) Process(req []string) {
 			cl.Send([]string{"ok", "1"}, false)
 		case "batchexec":
 			if cl.Auth {
-				if GlobalClient.DBPool.InitFlag {
-					if len(req) == 2 {
-						var cmdlist [][]string
-						err := json.Unmarshal([]byte(req[1]), &cmdlist)
-						if err != nil {
-							cl.Send([]string{"fail", "batchexec need use json format."}, false)
-							return
-						}
-						var resultlist [][]string
-						for _, v := range cmdlist {
-							res, err := cl.Query(v)
-							if err != nil {
-								resultlist = append(resultlist, []string{"error", err.Error()})
-								continue
-							}
-							if res == nil {
-								resultlist = append(resultlist, []string{"not_found"})
-								continue
-							}
-							resultlist = append(resultlist, res)
-						}
-						resultjson, err := json.Marshal(resultlist)
-						if err != nil {
-							cl.Send([]string{"fail", "batchexec send json result failed." + err.Error()}, false)
-							return
-						}
-						res := []string{"ok", string(resultjson)}
-						if cl.Zip {
-							cl.Send(res, true)
-						} else {
-							cl.Send(res, false)
-						}
+				if len(req) == 2 {
+					var cmdlist [][]string
+					err := json.Unmarshal([]byte(req[1]), &cmdlist)
+					if err != nil {
+						cl.Send([]string{"fail", "batchexec need use json format."}, false)
+						return
 					}
-				} else {
-					cl.Send([]string{"error", "Proxy service initing."}, false)
-					return
+					var resultlist [][]string
+					for _, v := range cmdlist {
+						res, err := cl.Query(v)
+						if err != nil {
+							resultlist = append(resultlist, []string{"error", err.Error()})
+							continue
+						}
+						if res == nil {
+							resultlist = append(resultlist, []string{"not_found"})
+							continue
+						}
+						resultlist = append(resultlist, res)
+					}
+					resultjson, err := json.Marshal(resultlist)
+					if err != nil {
+						cl.Send([]string{"fail", "batchexec send json result failed." + err.Error()}, false)
+						return
+					}
+					res := []string{"ok", string(resultjson)}
+					if cl.Zip {
+						cl.Send(res, true)
+					} else {
+						cl.Send(res, false)
+					}
 				}
-
 			} else {
 				cl.Send([]string{"fail", "not auth"}, false)
 			}
@@ -191,71 +171,28 @@ func (cl *SrvClient) Process(req []string) {
 			}
 		default:
 			if cl.Auth {
-				if GlobalClient.DBPool.InitFlag {
-					res, err := cl.Query(req)
-					if err != nil {
-						cl.Send([]string{"error", err.Error()}, false)
-						return
-					}
-					if CONFIGS.Debug {
-						log.Println("Response:", res)
-					}
-					if res == nil {
-						cl.Send([]string{"not_found"}, false)
-						return
-					} else {
-						if cl.Zip {
-							cl.Send(res, true)
-						} else {
-							cl.Send(res, false)
-						}
-						return
-					}
+				res, err := cl.Query(req)
+				if err != nil {
+					cl.Send([]string{"error", err.Error()}, false)
+					return
+				}
+				if CONFIGS.Debug {
+					log.Println("Response:", res)
+				}
+				if res == nil {
+					cl.Send([]string{"not_found"}, false)
+					return
 				} else {
-					cl.Send([]string{"error", "Proxy service initing."}, false)
+					if cl.Zip {
+						cl.Send(res, true)
+					} else {
+						cl.Send(res, false)
+					}
 					return
 				}
 			} else {
 				cl.Send([]string{"error", "you need login first"}, false)
 				return
-			}
-		}
-	}
-}
-func (cl *SrvClient) CheckDBNodes() {
-	if len(cl.DBNodes) == 0 {
-		for _, v := range CONFIGS.Nodelist {
-			if v.Mode == "main" || v.Mode == "queries" {
-				db, err := formosa.Connect(v.Host, v.Port, v.Password)
-				if CONFIGS.Debug {
-					log.Println("Connect to ", v.Host, v.Port)
-				}
-				if err != nil {
-					continue
-				}
-				cl.DBNodes = append(cl.DBNodes, &DBNode{Client: db, Id: v.Id, Info: v})
-			}
-		}
-	} else {
-		for _, cv := range CONFIGS.Nodelist {
-			add := true
-			for _, v := range cl.DBNodes {
-				if v.Info.Id == cv.Id && v.Info.Host == cv.Host && v.Info.Port == cv.Port {
-					add = false
-					break
-				}
-			}
-			if add {
-				if cv.Mode == "main" || cv.Mode == "queries" {
-					db, err := formosa.Connect(cv.Host, cv.Port, cv.Password)
-					if CONFIGS.Debug {
-						log.Println("Srv Client Connect to ", cv.Host, cv.Port)
-					}
-					if err != nil {
-						continue
-					}
-					cl.DBNodes = append(cl.DBNodes, &DBNode{Client: db, Id: cv.Id, Info: cv})
-				}
 			}
 		}
 	}
@@ -273,40 +210,70 @@ func (cl *SrvClient) Query(args []string) ([]string, error) {
 	var tmpList []string
 	var response []string
 	var counter int
-	process := false
-	mirror := false
-	quit := false
 	errFlag := false
-	sync := false
-	syncDel := false
+	binlog := false
 	var errMsg error
 	if len(args) > 0 {
 		switch args[0] {
 		case "hgetall", "hscan", "hrscan", "multi_hget", "scan", "rscan", "multi_get", "zscan", "zrscan":
 			mapList = make(map[string]string)
-			process = true
 		case "hsize", "hkeys", "keys", "rkeys", "hlist", "hrlist", "zkeys":
-			process = true
 		case "del", "multi_del", "multi_hdel", "hclear", "hdel", "zdel":
-			process = true
-			mirror = true
+			binlog = true
 		case "exists", "hexists", "zexists":
-			process = true
 		case "set", "setx", "setnx", "expire", "ttl", "getset", "incr", "getbit", "setbit", "multi_set", "hset", "hincr", "multi_hset", "zset", "zincr", "multi_zset", "qset", "qget", "qpush", "qpush_front", "qpush_back", "qpop":
-			mirror = true
+			binlog = true
 		case "mirror":
-			sync = true
-			if CONFIGS.Sync {
-				log.Println("Main Mirror Sync args:", args, cl.RemoteAddr)
-			}
 		case "mirror_del":
-			syncDel = true
-			if CONFIGS.Sync {
-				log.Println("Main Mirror Sync Del args:", args, cl.RemoteAddr)
+		}
+		if binlog {
+			meta, err := json.Marshal(args)
+			if err != nil {
+				log.Println("Set Meta Failed:", err)
+			} else {
+				DM.MetaSet(meta)
+			}
+		}
+		switch args[0] {
+		case "set":
+			if len(args) == 3 {
+				DM.Set([]byte(args[1]), []byte(args[2]))
+			} else {
+				return response, fmt.Errorf("Args length not equl 3.")
+			}
+		case "get":
+			if len(args) == 2 {
+				data, err := DM.Get([]byte(args[1]))
+				if err != nil {
+					return response, err
+				} else {
+					response = append(response, "ok")
+					response = append(response, string(data))
+					return response, err
+				}
+			} else {
+				return response, fmt.Errorf("Args length not equl 2.")
+			}
+		case "exists":
+			if len(args) == 2 {
+				data, err := DM.Exists([]byte(args[1]))
+				if err != nil {
+					return response, err
+				} else {
+					response = append(response, "ok")
+					if data {
+						response = append(response, "1")
+					} else {
+						response = append(response, "0")
+					}
+					return response, err
+				}
+			} else {
+				return response, fmt.Errorf("Args length not equl 2.")
 			}
 		}
 
-		for _, v := range cl.DBNodes {
+		/*for _, v := range cl.DBNodes {
 
 			db := v.Client
 			if CONFIGS.Debug {
@@ -467,7 +434,7 @@ func (cl *SrvClient) Query(args []string) ([]string, error) {
 			if quit {
 				break
 			}
-		}
+		}*/
 
 	} else {
 		errFlag = true

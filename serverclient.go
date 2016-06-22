@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"./client/go/formosa"
+	"github.com/matishsiao/formosa/client/go/formosa"
 )
 
 type ServerClient struct {
