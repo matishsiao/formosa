@@ -211,39 +211,39 @@ func (cl *SrvClient) Query(args []string) ([]string, error) {
 	var response []string
 	var counter int
 	errFlag := false
-	binlog := false
 	var errMsg error
 	if len(args) > 0 {
+		log.Println("Args:", args, binlog.seq)
 		switch args[0] {
-		case "hgetall", "hscan", "hrscan", "multi_hget", "scan", "rscan", "multi_get", "zscan", "zrscan":
-			mapList = make(map[string]string)
-		case "hsize", "hkeys", "keys", "rkeys", "hlist", "hrlist", "zkeys":
-		case "del", "multi_del", "multi_hdel", "hclear", "hdel", "zdel":
-			binlog = true
-		case "exists", "hexists", "zexists":
-		case "set", "setx", "setnx", "expire", "ttl", "getset", "incr", "getbit", "setbit", "multi_set", "hset", "hincr", "multi_hset", "zset", "zincr", "multi_zset", "qset", "qget", "qpush", "qpush_front", "qpush_back", "qpop":
-			binlog = true
-		case "mirror":
-		case "mirror_del":
-		}
-		if binlog {
-			meta, err := json.Marshal(args)
-			if err != nil {
-				log.Println("Set Meta Failed:", err)
+		case "metascan":
+			if len(args) == 3 {
+				return binlog.Scan(args[1], args[2])
 			} else {
-				DM.MetaSet(meta)
+				return response, fmt.Errorf("Args length not equl 3.")
 			}
-		}
-		switch args[0] {
+		case "scan":
+			if len(args) == 3 {
+				return DM.Scan(args[1], args[2])
+			} else {
+				return response, fmt.Errorf("Args length not equl 3.")
+			}
 		case "set":
 			if len(args) == 3 {
-				DM.Set([]byte(args[1]), []byte(args[2]))
+				err := DM.Set(args[1], args[2])
+				if err != nil {
+					return response, err
+				} else {
+					binlog.Push(args)
+					response = append(response, "ok")
+					response = append(response, "1")
+					return response, err
+				}
 			} else {
 				return response, fmt.Errorf("Args length not equl 3.")
 			}
 		case "get":
 			if len(args) == 2 {
-				data, err := DM.Get([]byte(args[1]))
+				data, err := DM.Get(args[1])
 				if err != nil {
 					return response, err
 				} else {
@@ -256,7 +256,7 @@ func (cl *SrvClient) Query(args []string) ([]string, error) {
 			}
 		case "exists":
 			if len(args) == 2 {
-				data, err := DM.Exists([]byte(args[1]))
+				data, err := DM.Exists(args[1])
 				if err != nil {
 					return response, err
 				} else {
