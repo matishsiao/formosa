@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	_ "io"
 	"log"
@@ -15,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/pquerna/ffjson/ffjson"
 )
 
 //Service Client for Proxy
@@ -73,7 +74,7 @@ func (cl *SrvClient) HealthCheck() {
 }
 
 func (cl *SrvClient) Read() {
-	timeout := 100
+	//timeout := 100
 
 	for cl.Connected {
 		data, err := cl.Recv()
@@ -86,11 +87,14 @@ func (cl *SrvClient) Read() {
 		} else {
 			cl.RequestTime = time.Now().Unix()
 			if len(data) > 0 {
+				//start := time.Now().UnixNano()
 				cl.Process(data)
+				//end := (time.Now().UnixNano() - start) / 1000000
+				//log.Printf("use time:%d ms", end)
 			}
-			timeout = 10
+			//timeout = 10
 		}
-		time.Sleep(time.Duration(timeout) * time.Microsecond)
+		//time.Sleep(time.Duration(timeout) * time.Microsecond)
 	}
 }
 
@@ -123,12 +127,24 @@ func (cl *SrvClient) Process(req []string) {
 			if cl.Auth {
 				if len(req) == 2 {
 					var cmdlist [][]string
-					err := json.Unmarshal([]byte(req[1]), &cmdlist)
+					pTime := time.Now().UnixNano() / 1000000
+					log.Printf("p time:%d ms", pTime)
+
+					err := ffjson.Unmarshal([]byte(req[1]), &cmdlist)
 					if err != nil {
 						cl.Send([]string{"fail", "batchexec need use json format."}, false)
 						return
 					}
+					pTime = time.Now().UnixNano() / 1000000
+					log.Printf("p json unmarshal time:%d ms", pTime)
 					var resultlist [][]string
+					async := false
+					if len(cmdlist) > 0 && len(cmdlist[0]) >= 1 && cmdlist[0][0] == "async" {
+						async = true
+						cl.Send([]string{"ok", "batchexec use async mode."}, false)
+					}
+					//err = DM.Batch(cmdlist)
+					log.Println("batch err:", err)
 					for _, v := range cmdlist {
 						res, err := cl.Query(v)
 						if err != nil {
@@ -141,16 +157,24 @@ func (cl *SrvClient) Process(req []string) {
 						}
 						resultlist = append(resultlist, res)
 					}
-					resultjson, err := json.Marshal(resultlist)
-					if err != nil {
-						cl.Send([]string{"fail", "batchexec send json result failed." + err.Error()}, false)
-						return
-					}
-					res := []string{"ok", string(resultjson)}
-					if cl.Zip {
-						cl.Send(res, true)
-					} else {
-						cl.Send(res, false)
+					if !async {
+						pTime = time.Now().UnixNano() / 1000000
+						log.Printf("p query time:%d ms", pTime)
+						resultjson, err := ffjson.Marshal(resultlist)
+						if err != nil {
+							cl.Send([]string{"fail", "batchexec send json result failed." + err.Error()}, false)
+							return
+						}
+						pTime = time.Now().UnixNano() / 1000000
+						log.Printf("p marshal time:%d ms", pTime)
+						res := []string{"ok", string(resultjson)}
+						if cl.Zip {
+							cl.Send(res, true)
+						} else {
+							cl.Send(res, false)
+						}
+						pTime = time.Now().UnixNano() / 1000000
+						log.Printf("p end time:%d ms", pTime)
 					}
 				}
 			} else {
@@ -213,19 +237,101 @@ func (cl *SrvClient) Query(args []string) ([]string, error) {
 	errFlag := false
 	var errMsg error
 	if len(args) > 0 {
-		log.Println("Args:", args, binlog.seq)
+		//log.Println("Args:", args, binlog.seq)
 		switch args[0] {
+		case "globalgetall":
+			if len(args) == 1 {
+				return DM.GlobalGetAll()
+			} else {
+				return response, fmt.Errorf("Args length not equl 2.")
+			}
 		case "metascan":
 			if len(args) == 3 {
 				return binlog.Scan(args[1], args[2])
 			} else {
 				return response, fmt.Errorf("Args length not equl 3.")
 			}
-		case "scan":
+		case "hset":
+			if len(args) == 4 {
+				err := DM.HashSet(args[1], args[2], args[3])
+				if err != nil {
+					return response, err
+				} else {
+					//binlog.Push(args)
+					response = append(response, "ok")
+					response = append(response, "1")
+					return response, err
+				}
+			} else {
+				return response, fmt.Errorf("Args length not equl 4.")
+			}
+		case "hget":
 			if len(args) == 3 {
-				return DM.Scan(args[1], args[2])
+				data, err := DM.HashGet(args[1], args[2])
+				if err != nil {
+					return response, err
+				} else {
+					response = append(response, "ok")
+					response = append(response, string(data))
+					return response, err
+				}
 			} else {
 				return response, fmt.Errorf("Args length not equl 3.")
+			}
+		case "hsize":
+			if len(args) == 2 {
+				data, err := DM.HashSize(args[1])
+				if err != nil {
+					return response, err
+				} else {
+					response = append(response, "ok")
+					response = append(response, fmt.Sprintf("%d", data))
+					return response, err
+				}
+			} else {
+				return response, fmt.Errorf("Args length not equl 2.")
+			}
+		case "hscan":
+			if len(args) == 5 {
+				return DM.HashScan(args[1], args[2], args[3], ToInt64(args[4]))
+			} else {
+				return response, fmt.Errorf("Args length not equl 5.")
+			}
+		case "hexists":
+			if len(args) == 3 {
+				data, err := DM.HashExists(args[1], args[2])
+				if err != nil {
+					return response, err
+				} else {
+					response = append(response, "ok")
+					if data {
+						response = append(response, "1")
+					} else {
+						response = append(response, "0")
+					}
+					return response, err
+				}
+			} else {
+				return response, fmt.Errorf("Args length not equl 4.")
+			}
+		case "hincr":
+			if len(args) == 4 {
+				data, err := DM.HashIncr(args[1], args[2], args[3])
+				if err != nil {
+					return response, err
+				} else {
+					response = append(response, "ok")
+					response = append(response, data)
+					return response, err
+				}
+			} else {
+				return response, fmt.Errorf("Args length not equl 4.")
+			}
+		case "scan":
+			if len(args) == 4 {
+				return DM.Scan(args[1], args[2], ToInt64(args[3]))
+			} else {
+				return response, fmt.Errorf("Args length not equl 4.")
 			}
 		case "set":
 			if len(args) == 3 {
@@ -270,6 +376,33 @@ func (cl *SrvClient) Query(args []string) ([]string, error) {
 				}
 			} else {
 				return response, fmt.Errorf("Args length not equl 2.")
+			}
+		case "incr":
+			if len(args) == 3 {
+				data, err := DM.Incr(args[1], args[2])
+				if err != nil {
+					return response, err
+				} else {
+					binlog.Push(args)
+					response = append(response, "ok")
+					response = append(response, data)
+					return response, err
+				}
+			} else {
+				return response, fmt.Errorf("Args length not equl 3.")
+			}
+		case "size":
+			if len(args) == 1 {
+				data, err := DM.Size()
+				if err != nil {
+					return response, err
+				} else {
+					response = append(response, "ok")
+					response = append(response, fmt.Sprintf("%d", data))
+					return response, err
+				}
+			} else {
+				return response, fmt.Errorf("Args length not equl 1.")
 			}
 		}
 

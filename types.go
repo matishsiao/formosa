@@ -6,10 +6,14 @@ import (
 	"github.com/matishsiao/formosa/client/go/formosa"
 )
 
-const DATATYPE_BINLOG string = "b"
-const DATATYPE_HASH string = "h"
-const DATATYPE_KV string = "k"
-const DATATYPE_QUEUE string = "q"
+const DATATYPE_BINLOG string = "B"
+const DATATYPE_BINLOG_NODE string = "N"
+const DATATYPE_HASH string = "H"
+const DATATYPE_HASH_END string = "I"
+const DATATYPE_KV string = "K"
+const DATATYPE_KV_END string = "L"
+const DATATYPE_QUEUE string = "Q"
+const DATATYPE_QUEUE_END string = "R"
 
 type Configs struct {
 	Debug           bool         `json:"debug"`

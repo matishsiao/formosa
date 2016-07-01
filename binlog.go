@@ -11,16 +11,16 @@ import (
 )
 
 type Binlog struct {
-	db  *leveldb.DB
+	DB  *leveldb.DB
 	seq uint64
 }
 
 func (bin *Binlog) Construct() {
-	db, err := leveldb.OpenFile("meta", nil)
+	DB, err := leveldb.OpenFile("meta", nil)
 	if err != nil {
 		log.Fatal("Open DB failed:", err)
 	}
-	bin.db = db
+	bin.DB = DB
 	binlog, err := bin.Get("BINLOG_SEQ")
 	if err != nil {
 		log.Println("Can't find binlog serial number", err)
@@ -38,26 +38,32 @@ func (bin *Binlog) Construct() {
 }
 
 func (bin *Binlog) Close() {
-	if bin.db != nil {
-		err := bin.db.Close()
+	if bin.DB != nil {
+		err := bin.DB.Close()
 		log.Fatal("Close DB failed:", err)
 	}
 }
 
-func (bin *Binlog) Push(args []string) {
+func (bin *Binlog) Push(args []string) error {
 	meta, err := json.Marshal(args)
 	if err != nil {
 		log.Println("Set Meta Failed:", err)
+		return err
 	} else {
-		bin.Set(meta)
+		return bin.Set(meta)
 	}
+}
+
+func (bin *Binlog) SetNodeSeq(node string, seq string) error {
+	nodeKey := EncodeBinlogNode(node)
+	return bin.DB.Put([]byte(nodeKey), []byte(seq), nil)
 }
 
 func (bin *Binlog) Set(value []byte) error {
 	binKey := EncodeBinlog(fmt.Sprintf("%d", bin.seq))
 	bin.seq++
 	bin.Commit()
-	return bin.db.Put([]byte(binKey), value, nil)
+	return bin.DB.Put([]byte(binKey), value, nil)
 }
 
 func (bin *Binlog) Scan(from string, to string) ([]string, error) {
@@ -74,7 +80,7 @@ func (bin *Binlog) Scan(from string, to string) ([]string, error) {
 		scanRange = nil
 	}
 
-	iter := bin.db.NewIterator(scanRange, nil)
+	iter := bin.DB.NewIterator(scanRange, nil)
 	var result []string
 	for iter.Next() {
 		result = append(result, string(iter.Key()))
@@ -87,15 +93,15 @@ func (bin *Binlog) Scan(from string, to string) ([]string, error) {
 
 func (bin *Binlog) Get(key string) ([]byte, error) {
 	binKey := EncodeBinlog(key)
-	return bin.db.Get([]byte(binKey), nil)
+	return bin.DB.Get([]byte(binKey), nil)
 }
 
 func (bin *Binlog) Commit() error {
 	idx := fmt.Sprintf("%d", bin.seq)
-	return bin.db.Put([]byte("BINLOG_SEQ"), []byte(idx), nil)
+	return bin.DB.Put([]byte("BINLOG_SEQ"), []byte(idx), nil)
 }
 
 func (bin *Binlog) Exists(key string) (bool, error) {
 	binKey := EncodeBinlog(key)
-	return bin.db.Has([]byte(binKey), nil)
+	return bin.DB.Has([]byte(binKey), nil)
 }

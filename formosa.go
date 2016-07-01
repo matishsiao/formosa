@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	version      string = "0.0.11"
+	version      string = "0.0.1"
 	configPath   string = "configs.json"
 	CONFIGS      Configs
 	modTime      time.Time
