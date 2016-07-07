@@ -245,25 +245,31 @@ func (cl *SrvClient) Query(args []string) ([]string, error) {
 			} else {
 				return response, fmt.Errorf("Args length not equl 2.")
 			}
-		case "metascan":
-			if len(args) == 3 {
-				return binlog.Scan(args[1], args[2])
-			} else {
-				return response, fmt.Errorf("Args length not equl 3.")
-			}
 		case "hset":
 			if len(args) == 4 {
 				err := DM.HashSet(args[1], args[2], args[3])
 				if err != nil {
 					return response, err
 				} else {
-					//binlog.Push(args)
+					//
 					response = append(response, "ok")
 					response = append(response, "1")
 					return response, err
 				}
 			} else {
 				return response, fmt.Errorf("Args length not equl 4.")
+			}
+		case "hdel":
+			if len(args) == 3 {
+				err := DM.HashDel(args[1], args[2])
+				if err != nil {
+					return response, err
+				} else {
+					response = append(response, "ok")
+					return response, err
+				}
+			} else {
+				return response, fmt.Errorf("Args length not equl 3.")
 			}
 		case "hget":
 			if len(args) == 3 {
@@ -339,13 +345,25 @@ func (cl *SrvClient) Query(args []string) ([]string, error) {
 				if err != nil {
 					return response, err
 				} else {
-					binlog.Push(args)
+
 					response = append(response, "ok")
 					response = append(response, "1")
 					return response, err
 				}
 			} else {
 				return response, fmt.Errorf("Args length not equl 3.")
+			}
+		case "del":
+			if len(args) == 2 {
+				err := DM.Del(args[1])
+				if err != nil {
+					return response, err
+				} else {
+					response = append(response, "ok")
+					return response, err
+				}
+			} else {
+				return response, fmt.Errorf("Args length not equl 2.")
 			}
 		case "get":
 			if len(args) == 2 {
@@ -383,7 +401,6 @@ func (cl *SrvClient) Query(args []string) ([]string, error) {
 				if err != nil {
 					return response, err
 				} else {
-					binlog.Push(args)
 					response = append(response, "ok")
 					response = append(response, data)
 					return response, err
@@ -403,6 +420,45 @@ func (cl *SrvClient) Query(args []string) ([]string, error) {
 				}
 			} else {
 				return response, fmt.Errorf("Args length not equl 1.")
+			}
+		case "qpush":
+			if len(args) == 3 {
+				err := DM.QueuePush(args[1], args[2])
+				if err != nil {
+					return response, err
+				} else {
+					response = append(response, "ok")
+					response = append(response, "1")
+					return response, err
+				}
+			} else {
+				return response, fmt.Errorf("Args length not equl 3.")
+			}
+		case "qpop":
+			if len(args) == 2 {
+				data, err := DM.QueuePop(args[1])
+				if err != nil {
+					return response, err
+				} else {
+					response = append(response, "ok")
+					response = append(response, string(data))
+					return response, err
+				}
+			} else {
+				return response, fmt.Errorf("Args length not equl 2.")
+			}
+		case "qsize":
+			if len(args) == 2 {
+				data, err := DM.QueueSize(args[1])
+				if err != nil {
+					return response, err
+				} else {
+					response = append(response, "ok")
+					response = append(response, fmt.Sprintf("%d", data))
+					return response, err
+				}
+			} else {
+				return response, fmt.Errorf("Args length not equl 2.")
 			}
 		}
 

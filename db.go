@@ -12,13 +12,13 @@ type DBManager struct {
 	DB *leveldb.DB
 }
 
-func (dm *DBManager) Construct() {
+func (dm *DBManager) Construct(dir string) {
 	option := &opt.Options{}
 	option.BlockSize = 64 * opt.KiB
 	option.WriteBuffer = 64 * opt.MiB
 	option.CompactionTableSize = 1000 * opt.MiB
 	option.BlockCacheCapacity = 500 * opt.MiB
-	DB, err := leveldb.OpenFile("data", option)
+	DB, err := leveldb.OpenFile(dir, option)
 	if err != nil {
 		log.Fatal("Open DB failed:", err)
 	}

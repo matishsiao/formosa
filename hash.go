@@ -24,6 +24,27 @@ func (dm *DBManager) HashSet(hash string, key string, value string) error {
 	return dm.DB.Put([]byte(enKey), []byte(value), nil)
 }
 
+func (dm *DBManager) HashDel(hash string, key string) error {
+	enKey := EncodeHash(hash, key)
+	exists, _ := dm.DB.Has([]byte(enKey), nil)
+	if !exists {
+		return nil
+	}
+	endKey := EncodeHashEnd(hash)
+	data, _ := dm.DB.Get([]byte(endKey), nil)
+	if len(data) == 0 {
+		dm.DB.Put([]byte(endKey), []byte("0"), nil)
+	} else {
+		size := ToInt64(string(data))
+		size--
+		if size <= 0 {
+			size = 0
+		}
+		dm.DB.Put([]byte(endKey), []byte(fmt.Sprintf("%d", size)), nil)
+	}
+	return dm.DB.Delete([]byte(enKey), nil)
+}
+
 func (dm *DBManager) HashIncr(hash string, key string, value string) (string, error) {
 	enKey := EncodeHash(hash, key)
 	transaction, err := dm.DB.OpenTransaction()

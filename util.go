@@ -33,3 +33,11 @@ func ToInt64(data string) int64 {
 	}
 	return val
 }
+
+func PaddingLeft(str string, length int) string {
+	if len(str) >= length {
+		return str
+	} else {
+		return PaddingLeft("0"+str, length)
+	}
+}

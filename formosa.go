@@ -18,7 +18,7 @@ var (
 	modTime      time.Time
 	GlobalClient ServerClient
 	DM           DBManager
-	binlog       Binlog
+	binlog       DBManager
 	memprofile   string = "mempprof.log"
 	memFile      *os.File
 )
@@ -41,8 +41,8 @@ func main() {
 		useCPU = 1
 	}
 	runtime.GOMAXPROCS(useCPU)
-	DM.Construct()
-	binlog.Construct()
+	DM.Construct("data")
+	binlog.Construct("meta")
 	//Pprof testing
 	//go memPorfile()
 	//GlobalClient.Init()

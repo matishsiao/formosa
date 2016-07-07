@@ -7,13 +7,13 @@ import (
 )
 
 const DATATYPE_BINLOG string = "B"
-const DATATYPE_BINLOG_NODE string = "N"
 const DATATYPE_HASH string = "H"
-const DATATYPE_HASH_END string = "I"
 const DATATYPE_KV string = "K"
-const DATATYPE_KV_END string = "L"
+const DATATYPE_KV_END string = "K#"
 const DATATYPE_QUEUE string = "Q"
-const DATATYPE_QUEUE_END string = "R"
+const QUEUE_SIZE int64 = 10
+const DATATYPE_QUEUE_FRONT string = "F"
+const DATATYPE_QUEUE_REAR string = "R"
 
 type Configs struct {
 	Debug           bool         `json:"debug"`

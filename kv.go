@@ -23,6 +23,26 @@ func (dm *DBManager) Set(key string, value string) error {
 	return dm.DB.Put([]byte(enKey), []byte(value), nil)
 }
 
+func (dm *DBManager) Del(key string) error {
+	enKey := EncodeKV(key)
+	exists, _ := dm.DB.Has([]byte(enKey), nil)
+	if !exists {
+		return nil
+	}
+	data, _ := dm.DB.Get([]byte(DATATYPE_KV_END), nil)
+	if len(data) == 0 {
+		dm.DB.Put([]byte(DATATYPE_KV_END), []byte("0"), nil)
+	} else {
+		size := ToInt64(string(data))
+		size--
+		if size <= 0 {
+			size = 0
+		}
+		dm.DB.Put([]byte(DATATYPE_KV_END), []byte(fmt.Sprintf("%d", size)), nil)
+	}
+	return dm.DB.Delete([]byte(enKey), nil)
+}
+
 func (dm *DBManager) Get(key string) ([]byte, error) {
 	enKey := EncodeKV(key)
 	return dm.DB.Get([]byte(enKey), nil)
