@@ -4,7 +4,7 @@ Formosa is cluster database using leveldb storage data.
 
 #Warning
 
-##This branch is not working for now.
+##This version not final version. All futures still in developing.
 
 # Version
 
@@ -12,16 +12,13 @@ version: 0.0.1
 
 # Futures
 	support functions:
-		auth 
+		auth
 		set
 		get
 		del
 		incr
 		exists
-		keys
-		rkeys
 		scan
-		rscan
 		batchexec
 		hset
 		hget
@@ -29,13 +26,12 @@ version: 0.0.1
 		hincr
 		hexists
 		hsize
-		hkeys
-		hgetall
 		hscan
-		hrscan
-		hclear
-		zip 
-	
+		zip
+		qpush
+		qpop
+		qsize
+
 
 # Configuration
 
@@ -78,7 +74,12 @@ using json format to configuration.
 ```
 
 #see more information?
- 
-#License
-comming soon
 
+#License
+N/A
+
+#Reference
+
+https://github.com/ideawu/ssdb
+
+https://github.com/syndtr/goleveldb
