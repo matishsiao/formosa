@@ -55,7 +55,7 @@ func DecodeKV(enkey string) string {
 		if string(enkey[0]) != DATATYPE_KV {
 			return ""
 		}
-		return enkey[1:]
+		return enkey[2:]
 	}
 	return ""
 }

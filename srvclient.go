@@ -127,16 +127,11 @@ func (cl *SrvClient) Process(req []string) {
 			if cl.Auth {
 				if len(req) == 2 {
 					var cmdlist [][]string
-					pTime := time.Now().UnixNano() / 1000000
-					log.Printf("p time:%d ms", pTime)
-
 					err := ffjson.Unmarshal([]byte(req[1]), &cmdlist)
 					if err != nil {
 						cl.Send([]string{"fail", "batchexec need use json format."}, false)
 						return
 					}
-					pTime = time.Now().UnixNano() / 1000000
-					log.Printf("p json unmarshal time:%d ms", pTime)
 					var resultlist [][]string
 					async := false
 					if len(cmdlist) > 0 && len(cmdlist[0]) >= 1 && cmdlist[0][0] == "async" {
@@ -144,7 +139,6 @@ func (cl *SrvClient) Process(req []string) {
 						cl.Send([]string{"ok", "batchexec use async mode."}, false)
 					}
 					//err = DM.Batch(cmdlist)
-					log.Println("batch err:", err)
 					for _, v := range cmdlist {
 						res, err := cl.Query(v)
 						if err != nil {
@@ -158,23 +152,49 @@ func (cl *SrvClient) Process(req []string) {
 						resultlist = append(resultlist, res)
 					}
 					if !async {
-						pTime = time.Now().UnixNano() / 1000000
-						log.Printf("p query time:%d ms", pTime)
 						resultjson, err := ffjson.Marshal(resultlist)
 						if err != nil {
 							cl.Send([]string{"fail", "batchexec send json result failed." + err.Error()}, false)
 							return
 						}
-						pTime = time.Now().UnixNano() / 1000000
-						log.Printf("p marshal time:%d ms", pTime)
 						res := []string{"ok", string(resultjson)}
 						if cl.Zip {
 							cl.Send(res, true)
 						} else {
 							cl.Send(res, false)
 						}
-						pTime = time.Now().UnixNano() / 1000000
-						log.Printf("p end time:%d ms", pTime)
+					}
+				}
+			} else {
+				cl.Send([]string{"fail", "not auth"}, false)
+			}
+		case "batchwrite":
+			if cl.Auth {
+				if len(req) == 2 {
+					var cmdlist [][]string
+					err := ffjson.Unmarshal([]byte(req[1]), &cmdlist)
+					if err != nil {
+						cl.Send([]string{"fail", "batchwrite need use json format."}, false)
+						return
+					}
+					async := false
+					if len(cmdlist) > 0 && len(cmdlist[0]) >= 1 && cmdlist[0][0] == "async" {
+						async = true
+						cl.Send([]string{"ok", "batchwrite use async mode."}, false)
+					}
+					err = DM.Batch(cmdlist)
+					if !async {
+						var res []string
+						if err != nil {
+							res = []string{"fail", err.Error()}
+						} else {
+							res = []string{"ok", "1"}
+						}
+						if cl.Zip {
+							cl.Send(res, true)
+						} else {
+							cl.Send(res, false)
+						}
 					}
 				}
 			} else {
