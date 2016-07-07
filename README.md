@@ -4,13 +4,13 @@ Formosa is cluster database using leveldb storage data.
 
 #Warning
 
-##This version not final version. All futures still in developing.
+##This version not final version. All features still in developing.
 
 # Version
 
 version: 0.0.1
 
-# Futures
+# Features
 	support functions:
 		auth
 		set
