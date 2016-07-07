@@ -11,7 +11,7 @@ const DATATYPE_HASH string = "H"
 const DATATYPE_KV string = "K"
 const DATATYPE_KV_END string = "K#"
 const DATATYPE_QUEUE string = "Q"
-const QUEUE_SIZE int64 = 10
+const QUEUE_SIZE int64 = 100000000
 const DATATYPE_QUEUE_FRONT string = "F"
 const DATATYPE_QUEUE_REAR string = "R"
 
