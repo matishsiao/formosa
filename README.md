@@ -12,7 +12,7 @@ version: 0.0.1
 
 # Features
 
-	## support functions:
+## support functions:
 
 		auth
 		set
@@ -36,17 +36,17 @@ version: 0.0.1
 		qpop
 		qsize
 
-	## websocket
+## websocket
 
-	 you can use websocket to subscribe all changed event in real time.
+you can use websocket to subscribe all changed event in real time.
 
-	 ```
+```
 	 var ws = new WebSocket("ws://127.0.0.1:8080/sub",["hashname","keyname"]);
 		 ws.onmessage = function(e) {
 			 console.log("Frames Receive:" + event.data);
 		 };
 
-	 ```
+ ```
 
 # Functions
 Command:auth
