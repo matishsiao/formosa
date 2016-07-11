@@ -11,7 +11,9 @@ Formosa is cluster database using leveldb storage data.
 version: 0.0.1
 
 # Features
-	support functions:
+
+	## support functions:
+
 		auth
 		set
 		get
@@ -34,7 +36,19 @@ version: 0.0.1
 		qpop
 		qsize
 
-# functions
+	## websocket
+
+	 you can use websocket to subscribe all changed event in real time.
+
+	 ```
+	 var ws = new WebSocket("ws://127.0.0.1:8080/sub",["hashname","keyname"]);
+		 ws.onmessage = function(e) {
+			 console.log("Frames Receive:" + event.data);
+		 };
+
+	 ```
+
+# Functions
 Command:auth
 
 	use password to verify client
@@ -303,7 +317,7 @@ using json format to configuration.
  go build
 ```
 
-#see more information?
+#See more information?
 
 [![GoDoc](https://godoc.org/github.com/matishsiao/goformosa/formosa?status.svg)](https://godoc.org/github.com/matishsiao/goformosa/formosa)
 
