@@ -305,6 +305,7 @@ using json format to configuration.
 
 #see more information?
 
+[![GoDoc](https://godoc.org/github.com/matishsiao/formosa?status.svg)](https://godoc.org/github.com/matishsiao/formosa)
 #License
 N/A
 
