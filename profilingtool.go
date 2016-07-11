@@ -1,4 +1,4 @@
-package main
+package formosa
 
 import (
 	"fmt"
@@ -144,9 +144,6 @@ func PrintGCSummary() {
 
 	printGC(memStats, gcstats)
 }
-
-
-
 
 func printGC(memStats *runtime.MemStats, gcstats *debug.GCStats) {
 

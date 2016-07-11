@@ -1,4 +1,4 @@
-package main
+package formosa
 
 import "github.com/syndtr/goleveldb/leveldb"
 
