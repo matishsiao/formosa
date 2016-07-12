@@ -53,7 +53,7 @@ var version string = "0.1.6"
 
 const layout = "2006-01-06 15:04:05"
 
-func (c Client) Connect(ip string, port int, auth string) (*Client, error) {
+func GetClient(ip string, port int, auth string) (*Client, error) {
 	client, err := connect(ip, port, auth)
 	if err != nil {
 		if debug {
