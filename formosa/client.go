@@ -34,6 +34,7 @@ type Client struct {
 	mu        *sync.Mutex
 	Closed    bool
 	init      bool
+	debug     bool
 }
 
 type ClientResult struct {
@@ -48,7 +49,6 @@ type HashData struct {
 	Value    string
 }
 
-var debug bool = false
 var version string = "0.1.6"
 
 const layout = "2006-01-06 15:04:05"
@@ -56,7 +56,7 @@ const layout = "2006-01-06 15:04:05"
 func GetClient(ip string, port int, auth string) (*Client, error) {
 	client, err := connect(ip, port, auth)
 	if err != nil {
-		if debug {
+		if client.debug {
 			log.Printf("Formosa Client Connect failed:%s:%d error:%v\n", ip, port, err)
 		}
 		go client.RetryConnect()
@@ -81,9 +81,9 @@ func connect(ip string, port int, auth string) (*Client, error) {
 }
 
 func (c *Client) Debug(flag bool) bool {
-	debug = flag
-	log.Println("Formosa Client Debug Mode:", debug)
-	return debug
+	c.debug = flag
+	log.Println("Formosa Client Debug Mode:", c.debug)
+	return c.debug
 }
 
 func (c *Client) Connect() error {
@@ -141,7 +141,7 @@ func (c *Client) HealthCheck() {
 			if err != nil {
 				log.Printf("Client Health Check Failed[%s]:%v\n", c.Id, err)
 			} else {
-				if debug {
+				if c.debug {
 					log.Printf("Client Health Check Success[%s]:%v\n", c.Id, result)
 				}
 			}
@@ -267,7 +267,7 @@ func (c *Client) do(args []interface{}) ([]string, error) {
 	if c.Connected {
 		err := c.send(args)
 		if err != nil {
-			if debug {
+			if c.debug {
 				log.Printf("Formosa Client[%s] Do Send Error:%v Data:%v\n", c.Id, err, args)
 			}
 			c.CheckError(err)
@@ -275,7 +275,7 @@ func (c *Client) do(args []interface{}) ([]string, error) {
 		}
 		resp, err := c.recv()
 		if err != nil {
-			if debug {
+			if c.debug {
 				log.Printf("Formosa Client[%s] Do Receive Error:%v Data:%v\n", c.Id, err, args)
 			}
 			c.CheckError(err)
@@ -441,7 +441,7 @@ func conHelper(chunk []HashData, wg *sync.WaitGroup, c *Client, results []interf
 func (c *Client) MultiHashSet(parts []HashData, connNum int) (interface{}, error) {
 	var privatePool []*Client
 	for i := 0; i < connNum-1; i++ {
-		innerClient, _ := Connect(c.Ip, c.Port, c.Password)
+		innerClient, _ := GetClient(c.Ip, c.Port, c.Password)
 		privatePool = append(privatePool, innerClient)
 	}
 	privatePool = append(privatePool, c)
