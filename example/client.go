@@ -1,4 +1,4 @@
-package formosa_test
+package main
 
 import (
 	"flag"
@@ -8,7 +8,7 @@ import (
 	"time"
 	"strconv"
 	"encoding/json"
-	"github.com/matishsiao/goformosa/formosa/client/go/formosa"
+	"github.com/matishsiao/goformosa/formosa"
 )
 
 var (
@@ -16,7 +16,7 @@ var (
 	p int
 )
 
-func ExampleClient() {
+func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	flag.StringVar(&h, "h", "127.0.0.1", "127.0.0.1")
 	flag.IntVar(&p, "p", 4001, "port")
@@ -25,7 +25,7 @@ func ExampleClient() {
 }
 
 func MultiClient() {
-	c, err := formosa.Connect(h, p, "sa23891odi1@8hfn!0932aqiomc9AQjiHH")
+	c, err := formosa.GetClient(h, p, "defaultpassword")
 	if err != nil {
 		log.Fatal("Connect Error:", err)
 	}

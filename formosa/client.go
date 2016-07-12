@@ -49,7 +49,7 @@ type HashData struct {
 	Value    string
 }
 
-var version string = "0.1.6"
+var clientVersion string = "0.1.6"
 
 const layout = "2006-01-06 15:04:05"
 
@@ -69,7 +69,7 @@ func GetClient(ip string, port int, auth string) (*Client, error) {
 }
 
 func connect(ip string, port int, auth string) (*Client, error) {
-	log.Printf("Formosa Client Version:%s\n", version)
+	log.Printf("Formosa Client Version:%s\n", clientVersion)
 	var c Client
 	c.Ip = ip
 	c.Port = port
