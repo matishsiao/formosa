@@ -68,38 +68,123 @@ func (cl *SrvClient) HealthCheck() {
 		}
 		time.Sleep(time.Duration(timeout) * time.Second)
 	}
-
 	//receyle client
 	cl = nil
 }
 
 func (cl *SrvClient) Read() {
-	//timeout := 100
-
 	for cl.Connected {
 		data, err := cl.Recv()
 		if err != nil {
-			if CONFIGS.Debug {
-				log.Printf("Srv Client Receive Error:%v RemoteAddr:%s\n", err, cl.RemoteAddr)
-			}
 			cl.Close()
 			break
 		} else {
 			cl.RequestTime = time.Now().Unix()
 			if len(data) > 0 {
-				//start := time.Now().UnixNano()
 				cl.Process(data)
-				//end := (time.Now().UnixNano() - start) / 1000000
-				//log.Printf("use time:%d ms", end)
 			}
-			//timeout = 10
 		}
-		//time.Sleep(time.Duration(timeout) * time.Microsecond)
+	}
+}
+
+func (cl *SrvClient) SyncProcess(req []string) {
+	if len(req) == 0 {
+		//ok, not_found, error, fail, client_error
+		cl.Send([]string{"error", "request format incorrect."}, false)
+	} else {
+		req = req[1:]
+		switch req[0] {
+		case "batchexec":
+			if len(req) == 2 {
+					var cmdlist [][]string
+					err := ffjson.Unmarshal([]byte(req[1]), &cmdlist)
+					if err != nil {
+						cl.Send([]string{"fail", "batchexec need use json format."}, false)
+						return
+					}
+					var resultlist [][]string
+					async := false
+					if len(cmdlist) > 0 && len(cmdlist[0]) >= 1 && cmdlist[0][0] == "async" {
+						async = true
+						cl.Send([]string{"ok", "batchexec use async mode."}, false)
+					}
+					//err = DM.Batch(cmdlist)
+					for _, v := range cmdlist {
+						res, err := cl.Query(v,false)
+						if err != nil {
+							resultlist = append(resultlist, []string{"error", err.Error()})
+							continue
+						}
+						if res == nil {
+							resultlist = append(resultlist, []string{"not_found"})
+							continue
+						}
+						resultlist = append(resultlist, res)
+					}
+					if !async {
+						resultjson, err := ffjson.Marshal(resultlist)
+						if err != nil {
+							cl.Send([]string{"fail", "batchexec send json result failed." + err.Error()}, false)
+							return
+						}
+						res := []string{"ok", string(resultjson)}
+						if cl.Zip {
+							cl.Send(res, true)
+						} else {
+							cl.Send(res, false)
+						}
+					}
+			}
+		case "batchwrite":
+			if len(req) == 2 {
+					var cmdlist [][]string
+					err := ffjson.Unmarshal([]byte(req[1]), &cmdlist)
+					if err != nil {
+						cl.Send([]string{"fail", "batchwrite need use json format."}, false)
+						return
+					}
+					async := false
+					if len(cmdlist) > 0 && len(cmdlist[0]) >= 1 && cmdlist[0][0] == "async" {
+						async = true
+						cl.Send([]string{"ok", "batchwrite use async mode."}, false)
+					}
+					err = DM.Batch(cmdlist)
+					if !async {
+						var res []string
+						if err != nil {
+							res = []string{"fail", err.Error()}
+						} else {
+							res = []string{"ok", "1"}
+						}
+						if cl.Zip {
+							cl.Send(res, true)
+						} else {
+							cl.Send(res, false)
+						}
+					}
+			}
+		default:
+			res, err := cl.Query(req,false)
+			if err != nil {
+				cl.Send([]string{"error", err.Error()}, false)
+				return
+			}
+			if res == nil {
+				cl.Send([]string{"not_found"}, false)
+				return
+			} else {
+				if cl.Zip {
+					cl.Send(res, true)
+				} else {
+					cl.Send(res, false)
+				}
+				return
+			}
+		}
 	}
 }
 
 func (cl *SrvClient) Process(req []string) {
-
 	if len(req) == 0 {
 		//ok, not_found, error, fail, client_error
 		cl.Send([]string{"error", "request format incorrect."}, false)
@@ -123,6 +208,10 @@ func (cl *SrvClient) Process(req []string) {
 			}
 		case "ping":
 			cl.Send([]string{"ok", "1"}, false)
+		case "sync":
+			if cl.Auth {
+				cl.SyncProcess(req)
+			}
 		case "batchexec":
 			if cl.Auth {
 				if len(req) == 2 {
@@ -140,7 +229,7 @@ func (cl *SrvClient) Process(req []string) {
 					}
 					//err = DM.Batch(cmdlist)
 					for _, v := range cmdlist {
-						res, err := cl.Query(v)
+						res, err := cl.Query(v,true)
 						if err != nil {
 							resultlist = append(resultlist, []string{"error", err.Error()})
 							continue
@@ -183,6 +272,7 @@ func (cl *SrvClient) Process(req []string) {
 						cl.Send([]string{"ok", "batchwrite use async mode."}, false)
 					}
 					err = DM.Batch(cmdlist)
+					SyncClient.Append(req)
 					if !async {
 						var res []string
 						if err != nil {
@@ -215,7 +305,7 @@ func (cl *SrvClient) Process(req []string) {
 			}
 		default:
 			if cl.Auth {
-				res, err := cl.Query(req)
+				res, err := cl.Query(req,true)
 				if err != nil {
 					cl.Send([]string{"error", err.Error()}, false)
 					return
@@ -242,7 +332,7 @@ func (cl *SrvClient) Process(req []string) {
 	}
 }
 
-func (cl *SrvClient) Query(args []string) ([]string, error) {
+func (cl *SrvClient) Query(args []string,sync bool) ([]string, error) {
 	find := false
 	if CONFIGS.Debug {
 		log.Println("Query:", args)
@@ -271,9 +361,11 @@ func (cl *SrvClient) Query(args []string) ([]string, error) {
 				if err != nil {
 					return response, err
 				} else {
-					//
 					response = append(response, "ok")
 					response = append(response, "1")
+					if sync {
+						SyncClient.Append(args)
+					}
 					return response, err
 				}
 			} else {
@@ -286,6 +378,9 @@ func (cl *SrvClient) Query(args []string) ([]string, error) {
 					return response, err
 				} else {
 					response = append(response, "ok")
+					if sync {
+						SyncClient.Append(args)
+					}
 					return response, err
 				}
 			} else {
@@ -348,6 +443,9 @@ func (cl *SrvClient) Query(args []string) ([]string, error) {
 				} else {
 					response = append(response, "ok")
 					response = append(response, data)
+					if sync {
+						SyncClient.Append(args)
+					}
 					return response, err
 				}
 			} else {
@@ -365,9 +463,11 @@ func (cl *SrvClient) Query(args []string) ([]string, error) {
 				if err != nil {
 					return response, err
 				} else {
-
 					response = append(response, "ok")
 					response = append(response, "1")
+					if sync {
+						SyncClient.Append(args)
+					}
 					return response, err
 				}
 			} else {
@@ -380,6 +480,9 @@ func (cl *SrvClient) Query(args []string) ([]string, error) {
 					return response, err
 				} else {
 					response = append(response, "ok")
+					if sync {
+						SyncClient.Append(args)
+					}
 					return response, err
 				}
 			} else {
@@ -423,6 +526,9 @@ func (cl *SrvClient) Query(args []string) ([]string, error) {
 				} else {
 					response = append(response, "ok")
 					response = append(response, data)
+					if sync {
+						SyncClient.Append(args)
+					}
 					return response, err
 				}
 			} else {
@@ -449,6 +555,9 @@ func (cl *SrvClient) Query(args []string) ([]string, error) {
 				} else {
 					response = append(response, "ok")
 					response = append(response, "1")
+					if sync {
+						SyncClient.Append(args)
+					}
 					return response, err
 				}
 			} else {
@@ -462,6 +571,9 @@ func (cl *SrvClient) Query(args []string) ([]string, error) {
 				} else {
 					response = append(response, "ok")
 					response = append(response, string(data))
+					if sync {
+						SyncClient.Append(args)
+					}
 					return response, err
 				}
 			} else {

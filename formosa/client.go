@@ -9,9 +9,7 @@ import (
 	_ "io"
 	"io/ioutil"
 	"log"
-	"math"
 	"net"
-	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -88,11 +86,6 @@ func (c *Client) Debug(flag bool) bool {
 
 func (c *Client) Connect() error {
 	log.Printf("Client[%s] connect to %s:%d\n", c.Id, c.Ip, c.Port)
-	/*addr, err := net.ResolveTCPAddr("tcp", fmt.Sprintf("%s:%d", c.Ip, c.Port))
-	if err != nil {
-		log.Println("Client ResolveTCPAddr failed:", err)
-		return err
-	}*/
 	seconds := 60
 	timeOut := time.Duration(seconds) * time.Second
 	sock, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", c.Ip, c.Port), timeOut)
@@ -100,11 +93,6 @@ func (c *Client) Connect() error {
 		log.Println("Formosa Client dial failed:", err, c.Id)
 		return err
 	}
-	/*sock, err := net.DialTCP("tcp", nil, addr)
-	if err != nil {
-		log.Println("Formosa Client dial failed:", err, c.Id)
-		return err
-	}*/
 	c.sock = sock
 	c.Connected = true
 	if c.Retry {
@@ -133,8 +121,6 @@ func (c *Client) KeepAlive() {
 
 func (c *Client) HealthCheck() {
 	timeout := 60
-	//wait client connect to server
-	//time.Sleep(5 * time.Second)
 	for {
 		if c.Connected && !c.Retry && !c.Closed {
 			result, err := c.Do("ping")
@@ -174,7 +160,6 @@ func (c *Client) RetryConnect() {
 }
 
 func (c *Client) CheckError(err error) {
-	//if err == io.EOF || strings.Contains(err.Error(), "connection") || strings.Contains(err.Error(), "timed out") || strings.Contains(err.Error(), "route") {
 	if err != nil {
 		if !c.Closed {
 			log.Printf("Check Error:%v Retry connect.\n", err)
@@ -191,14 +176,7 @@ func (c *Client) processDo() {
 		runArgs := args[1:]
 		result, err := c.do(runArgs)
 		c.result <- ClientResult{Id: runId, Data: result, Error: err}
-		/*if c.Connected && !c.Retry && !c.Closed {
-			c.result <- ClientResult{Id: runId, Data: result, Error: err}
-		} else {
-			time.Sleep(1 * time.Second)
-		}*/
 	}
-	//close(c.result)
-	//log.Println("processDo process channel has closed")
 }
 
 func ArrayAppendToFirst(src []interface{}, dst []interface{}) []interface{} {
@@ -372,37 +350,9 @@ func (c *Client) Del(key string) (interface{}, error) {
 	params := []interface{}{key}
 	return c.ProcessCmd("del", params)
 }
-
-func (c *Client) SetX(key string, val string, ttl int) (interface{}, error) {
-	params := []interface{}{key, val, ttl}
-	return c.ProcessCmd("setx", params)
-}
-
 func (c *Client) Scan(start string, end string, limit int) (interface{}, error) {
 	params := []interface{}{start, end, limit}
 	return c.ProcessCmd("scan", params)
-}
-
-func (c *Client) Expire(key string, ttl int) (interface{}, error) {
-	params := []interface{}{key, ttl}
-	return c.ProcessCmd("expire", params)
-}
-
-func (c *Client) KeyTTL(key string) (interface{}, error) {
-	params := []interface{}{key}
-	return c.ProcessCmd("ttl", params)
-}
-
-//set new key if key exists then ignore this operation
-func (c *Client) SetNew(key string, val string) (interface{}, error) {
-	params := []interface{}{key, val}
-	return c.ProcessCmd("setnx", params)
-}
-
-//
-func (c *Client) GetSet(key string, val string) (interface{}, error) {
-	params := []interface{}{key, val}
-	return c.ProcessCmd("getset", params)
 }
 
 //incr num to exist number value
@@ -419,80 +369,6 @@ func (c *Client) Exists(key string) (interface{}, error) {
 func (c *Client) HashSet(hash string, key string, val string) (interface{}, error) {
 	params := []interface{}{hash, key, val}
 	return c.ProcessCmd("hset", params)
-}
-
-// ------  added by Dixen for multi connections Hashset function
-
-func conHelper(chunk []HashData, wg *sync.WaitGroup, c *Client, results []interface{}, errs []error) {
-	defer wg.Done()
-	fmt.Printf("go - %v\n", time.Now())
-	for _, v := range chunk {
-		params := []interface{}{v.HashName, v.Key, v.Value}
-		res, err := c.ProcessCmd("hset", params)
-		if err != nil {
-			errs = append(errs, err)
-			break
-		}
-		results = append(results, res)
-	}
-	fmt.Printf("so - %v\n", time.Now())
-}
-
-func (c *Client) MultiHashSet(parts []HashData, connNum int) (interface{}, error) {
-	var privatePool []*Client
-	for i := 0; i < connNum-1; i++ {
-		innerClient, _ := GetClient(c.Ip, c.Port, c.Password)
-		privatePool = append(privatePool, innerClient)
-	}
-	privatePool = append(privatePool, c)
-	var results []interface{}
-	var errs []error
-	var wg sync.WaitGroup
-	wg.Add(connNum)
-	p := len(parts) / connNum
-	for i := 1; i <= connNum; i++ {
-		if i == 1 {
-			go conHelper(parts[:p*i], &wg, privatePool[i-1], results, errs)
-		} else if i == connNum {
-			go conHelper(parts[p*(i-1):], &wg, privatePool[i-1], results, errs)
-		} else {
-			go conHelper(parts[p*(i-1):p*i], &wg, privatePool[i-1], results, errs)
-		}
-
-	}
-	wg.Wait()
-	for _, c := range privatePool[:connNum-1] {
-		c.Close()
-	}
-	if len(errs) > 0 {
-		return nil, errs[0]
-	}
-	return results, nil
-}
-
-func (c *Client) MultiMode(args [][]interface{}) ([]string, error) {
-	if c.Connected {
-		for _, v := range args {
-			err := c.send(v)
-			if err != nil {
-				log.Printf("Formosa Client[%s] Do Send Error:%v Data:%v\n", c.Id, err, args)
-				c.CheckError(err)
-				return nil, err
-			}
-		}
-		var resps []string
-		for i := 0; i < len(args); i++ {
-			resp, err := c.recv()
-			if err != nil {
-				log.Printf("Formosa Client[%s] Do Receive Error:%v Data:%v\n", c.Id, err, args)
-				c.CheckError(err)
-				return nil, err
-			}
-			resps = append(resps, strings.Join(resp, ","))
-		}
-		return resps, nil
-	}
-	return nil, fmt.Errorf("lost connection")
 }
 
 func (c *Client) HashGet(hash string, key string) (interface{}, error) {
@@ -520,126 +396,6 @@ func (c *Client) HashSize(hash string) (interface{}, error) {
 	return c.ProcessCmd("hsize", params)
 }
 
-//search from start to end hashmap name or haskmap key name,except start word
-func (c *Client) HashList(start string, end string, limit int) (interface{}, error) {
-	params := []interface{}{start, end, limit}
-	return c.ProcessCmd("hlist", params)
-}
-
-func (c *Client) HashKeys(hash string, start string, end string, limit int) (interface{}, error) {
-	params := []interface{}{hash, start, end, limit}
-	return c.ProcessCmd("hkeys", params)
-}
-func (c *Client) HashKeysAll(hash string) ([]string, error) {
-	size, err := c.HashSize(hash)
-	if err != nil {
-		return nil, err
-	}
-	log.Printf("DB Hash Size:%d\n", size)
-	hashSize := size.(int64)
-	page_range := 15
-	splitSize := math.Ceil(float64(hashSize) / float64(page_range))
-	log.Printf("DB Hash Size:%d hashSize:%d splitSize:%f\n", size, hashSize, splitSize)
-	var range_keys []string
-	for i := 1; i <= int(splitSize); i++ {
-		start := ""
-		end := ""
-		if len(range_keys) != 0 {
-			start = range_keys[len(range_keys)-1]
-			end = ""
-		}
-
-		val, err := c.HashKeys(hash, start, end, page_range)
-		if err != nil {
-			log.Println("HashGetAll Error:", err)
-			continue
-		}
-		if val == nil {
-			continue
-		}
-		//log.Println("HashGetAll type:",reflect.TypeOf(val))
-		var data []string
-		if fmt.Sprintf("%v", reflect.TypeOf(val)) == "string" {
-			data = append(data, val.(string))
-		} else {
-			data = val.([]string)
-		}
-
-		if len(data) > 0 {
-			range_keys = append(range_keys, data...)
-		}
-
-	}
-	log.Printf("DB Hash Keys Size:%d\n", len(range_keys))
-	return range_keys, nil
-}
-
-func (c *Client) HashGetAll(hash string) (map[string]string, error) {
-	params := []interface{}{hash}
-	val, err := c.ProcessCmd("hgetall", params)
-	if err != nil {
-		return nil, err
-	} else {
-		return val.(map[string]string), err
-	}
-
-	return nil, nil
-}
-
-func (c *Client) HashGetAllLite(hash string) (map[string]string, error) {
-	size, err := c.HashSize(hash)
-	if err != nil {
-		return nil, err
-	}
-	//log.Printf("DB Hash Size:%d\n",size)
-	hashSize := size.(int64)
-	page_range := 20
-	splitSize := math.Ceil(float64(hashSize) / float64(page_range))
-	//log.Printf("DB Hash Size:%d hashSize:%d splitSize:%f\n",size,hashSize,splitSize)
-	var range_keys []string
-	GetResult := make(map[string]string)
-	for i := 1; i <= int(splitSize); i++ {
-		start := ""
-		end := ""
-		if len(range_keys) != 0 {
-			start = range_keys[len(range_keys)-1]
-			end = ""
-		}
-
-		val, err := c.HashKeys(hash, start, end, page_range)
-		if err != nil {
-			log.Println("HashGetAll Error:", err)
-			continue
-		}
-		if val == nil {
-			continue
-		}
-		//log.Println("HashGetAll type:",reflect.TypeOf(val))
-		var data []string
-		if fmt.Sprintf("%v", reflect.TypeOf(val)) == "string" {
-			data = append(data, val.(string))
-		} else {
-			data = val.([]string)
-		}
-		range_keys = data
-		if len(data) > 0 {
-			result, err := c.HashMultiGet(hash, data)
-			if err != nil {
-				log.Println("HashGetAll Error:", err)
-			}
-			if result == nil {
-				continue
-			}
-			for k, v := range result {
-				GetResult[k] = v
-			}
-		}
-
-	}
-
-	return GetResult, nil
-}
-
 func (c *Client) HashScan(hash string, start string, end string, limit int) (map[string]string, error) {
 	params := []interface{}{hash, start, end, limit}
 	val, err := c.ProcessCmd("hscan", params)
@@ -650,53 +406,6 @@ func (c *Client) HashScan(hash string, start string, end string, limit int) (map
 	}
 
 	return nil, nil
-}
-
-func (c *Client) HashRScan(hash string, start string, end string, limit int) (map[string]string, error) {
-	params := []interface{}{hash, start, end, limit}
-	val, err := c.ProcessCmd("hrscan", params)
-	if err != nil {
-		return nil, err
-	} else {
-		return val.(map[string]string), err
-	}
-	return nil, nil
-}
-
-func (c *Client) HashMultiSet(hash string, data map[string]string) (interface{}, error) {
-	params := []interface{}{hash}
-	for k, v := range data {
-		params = append(params, k)
-		params = append(params, v)
-	}
-	return c.ProcessCmd("multi_hset", params)
-}
-
-func (c *Client) HashMultiGet(hash string, keys []string) (map[string]string, error) {
-	params := []interface{}{hash}
-	for _, v := range keys {
-		params = append(params, v)
-	}
-	val, err := c.ProcessCmd("multi_hget", params)
-	if err != nil {
-		return nil, err
-	} else {
-		return val.(map[string]string), err
-	}
-	return nil, nil
-}
-
-func (c *Client) HashMultiDel(hash string, keys []string) (interface{}, error) {
-	params := []interface{}{hash}
-	for _, v := range keys {
-		params = append(params, v)
-	}
-	return c.ProcessCmd("multi_hdel", params)
-}
-
-func (c *Client) HashClear(hash string) (interface{}, error) {
-	params := []interface{}{hash}
-	return c.ProcessCmd("hclear", params)
 }
 
 func (c *Client) Send(args ...interface{}) error {
@@ -789,7 +498,6 @@ func (c *Client) parse() []string {
 		}
 		p := buf[offset : offset+Idx]
 		offset += Idx + 1
-		//fmt.Printf("> [%s]\n", p);
 		if len(p) == 0 || (len(p) == 1 && p[0] == '\r') {
 			if len(resp) == 0 {
 				continue
@@ -801,13 +509,9 @@ func (c *Client) parse() []string {
 		pIdx := strings.Replace(strconv.Quote(string(p)), `"`, ``, -1)
 		size, err := strconv.Atoi(pIdx)
 		if err != nil || size < 0 {
-			//log.Printf("Formosa Parse Error:%v data:%v\n",err,pIdx)
 			return nil
 		}
-		//fmt.Printf("packet size:%d\n",size);
 		if offset+size >= c.recv_buf.Len() {
-			//tmpLen := offset+size
-			//fmt.Printf("buf size too big:%d > buf len:%d\n",tmpLen,c.recv_buf.Len());
 			break
 		}
 
@@ -815,8 +519,6 @@ func (c *Client) parse() []string {
 		resp = append(resp, string(v))
 		offset += size + 1
 	}
-
-	//fmt.Printf("buf.size: %d packet not ready...\n", len(buf))
 	return []string{}
 }
 
@@ -846,7 +548,6 @@ func (c *Client) UnZip(data []byte) []string {
 				break
 			}
 			p := string(zipData[:Idx])
-			//fmt.Println("p:[",p,"]\n")
 			size, err := strconv.Atoi(string(p))
 			if err != nil || size < 0 {
 				zipData = zipData[Idx+1:]
@@ -855,7 +556,6 @@ func (c *Client) UnZip(data []byte) []string {
 				offset = Idx + 1 + size
 				hiIdx = size + Idx + 1
 				resp = append(resp, string(zipData[Idx+1:hiIdx]))
-				//fmt.Printf("data:[%s] size:%d Idx:%d\n",str,size,Idx+1)
 				zipData = zipData[offset:]
 			}
 

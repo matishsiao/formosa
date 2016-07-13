@@ -5,31 +5,29 @@ import (
 	"log"
 	"sync"
 	"time"
-
-	"github.com/matishsiao/formosa/client/go/formosa"
 )
 
 type ServerClient struct {
-	Mutex     *sync.Mutex
-	DBNodes   []*DBNode
-	DBPool    *ServerConnectionPool
-	Running   bool
-	Process   bool
-	ArgsQueue []*Queue
-	QueueIdx  int
+	Mutex      *sync.Mutex
+	DBNodes    []*DBNode
+	ServerPool *ServerConnectionPool
+	Running    bool
+	Process    bool
+	ArgsQueue  []*Queue
+	QueueIdx   int
 }
 
 func (cl *ServerClient) Init() {
 	cl.Mutex = &sync.Mutex{}
 	cl.Running = true
-	cl.DBPool = &ServerConnectionPool{ConnectionLimit: CONFIGS.ConnectionLimit}
-	for i := 0; i < cl.DBPool.ConnectionLimit*5; i++ {
+	cl.ServerPool = &ServerConnectionPool{ConnectionLimit: CONFIGS.ConnectionLimit}
+	for i := 0; i < cl.ServerPool.ConnectionLimit*5; i++ {
 		var queue Queue
 		queue.Args = make(chan []string)
 		cl.ArgsQueue = append(cl.ArgsQueue, &queue)
 		go cl.Watcher(queue.Args)
 	}
-	go cl.DBPool.Init()
+	go cl.ServerPool.Init()
 }
 func (cl *ServerClient) Watcher(queue chan []string) {
 	for args := range queue {
@@ -44,10 +42,7 @@ func (cl *ServerClient) Append(args []string) {
 	if !cl.Running {
 		cl.Running = true
 	}
-	if CONFIGS.Debug {
-		log.Println("Server Client Append:", args)
-	}
-	//cl.MirrorQuery(args)
+	//loop append to queue list
 	cl.Mutex.Lock()
 	cl.QueueIdx++
 	if cl.QueueIdx >= len(cl.ArgsQueue) {
@@ -71,7 +66,7 @@ func (cl *ServerClient) Close() {
 		time.Sleep(100 * time.Millisecond)
 	}
 	cl.DBNodes = nil
-	cl.DBPool.Close()
+	cl.ServerPool.Close()
 	cl = nil
 }
 
@@ -80,7 +75,7 @@ func (cl *ServerClient) MirrorQuery(args []string) {
 		cl.Mutex.Lock()
 		cl.Process = true
 		cl.Mutex.Unlock()
-		err := cl.DBPool.Run(args)
+		err := cl.ServerPool.Run(args)
 		//if some date save failed,we will retry again.
 		if err != nil {
 			log.Println("Mirror query failed args:", args, "error:", err)
@@ -164,11 +159,9 @@ func (scp *ServerConnectionPool) CheckMirrorDB() {
 		scp.Counter = make(map[string]int)
 		scp.Mutex = make(map[string]*sync.Mutex)
 		for _, v := range CONFIGS.Nodelist {
-			if v.Mode == "mirror" || v.Mode == "sync" {
-				name := fmt.Sprintf("%s:%d", v.Host, v.Port)
-				scp.Mutex[name] = &sync.Mutex{}
-				go scp.ConnectToDB(name, v)
-			}
+			name := fmt.Sprintf("%s:%d", v.Host, v.Port)
+			scp.Mutex[name] = &sync.Mutex{}
+			go scp.ConnectToDB(name, v)
 		}
 
 		for k, v := range scp.Pool {
@@ -181,7 +174,7 @@ func (scp *ServerConnectionPool) CheckMirrorDB() {
 
 func (scp *ServerConnectionPool) ConnectToDB(name string, v DBNodeInfo) {
 	for i := 0; i < scp.ConnectionLimit; i++ {
-		db, err := formosa.Connect(v.Host, v.Port, v.Password)
+		db, err := GetClient(v.Host, v.Port, v.Password)
 		if CONFIGS.Debug {
 			log.Println("Connect to ", v.Host, v.Port)
 		}
@@ -190,12 +183,10 @@ func (scp *ServerConnectionPool) ConnectToDB(name string, v DBNodeInfo) {
 		}
 
 		//default use zip transfered data
-		if v.Mode == "mirror" {
-			db.Do("zip", 1)
-		}
+		db.Do("zip", 1)
 		scp.Pool[name] = append(scp.Pool[name], ServerConnection{Client: db, Info: v, Mu: &sync.Mutex{}})
 	}
-	log.Printf("Add Mirror Connection[%s][%s]:%d Connections.", name, v.Mode, len(scp.Pool[name]))
+	log.Printf("Add Mirror Connection[%s]:%d Connections.", name, len(scp.Pool[name]))
 }
 
 func (scp *ServerConnectionPool) Status() {
@@ -257,18 +248,15 @@ func (scp *ServerConnectionPool) Run(args []string) error {
 
 type ServerConnection struct {
 	Info   DBNodeInfo
-	Client *formosa.Client
+	Client *Client
 	InUse  bool
 	Mu     *sync.Mutex
 }
 
 func (sc *ServerConnection) Run(args []string) error {
 	var err error
-	var run_args []string = args
-
-	if sc.Info.Mode == "sync" {
-		run_args = run_args[1:]
-	}
+	run_args := []string{"sync"}
+	run_args = append(run_args,args...)
 	db := sc.Client
 	sc.Mu.Lock()
 	sc.InUse = true

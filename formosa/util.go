@@ -59,15 +59,25 @@ func writeMemProfile() {
 	pprof.WriteHeapProfile(memFile)
 }
 
+func ConfigWatcher() {
+	for {
+		configWatcher()
+		time.Sleep(250 * time.Millisecond)
+	}
+}
 func configWatcher() {
 	file, err := os.Open(ConfigPath) // For read access.
 	if err != nil {
 		log.Println("configWatcher error:", err)
+		return
 	}
 	info, err := file.Stat()
 	if err != nil {
 		log.Println("configWatcher error:", err)
+		file.Close()
+		return
 	}
+	file.Close()
 	if modTime.Unix() == -62135596800 {
 		log.Println("configWatcher init mod time")
 		modTime = info.ModTime()
@@ -79,9 +89,10 @@ func configWatcher() {
 		CONFIGS, err = loadConfigs(ConfigPath)
 		if err != nil {
 			log.Printf("configWatcher error:%v\n", err)
+			return
 		}
 	}
-	defer file.Close()
+
 }
 
 func loadConfigs(fileName string) (Configs, error) {

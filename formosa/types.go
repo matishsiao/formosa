@@ -16,11 +16,14 @@ const DATATYPE_QUEUE_FRONT string = "F"
 const DATATYPE_QUEUE_REAR string = "R"
 
 type Configs struct {
-	Debug           bool         `json:"debug"`
-	Host            string       `json:"host"`
-	Http            string       `json:"http"`
+	Debug  bool   `json:"debug"`
+	Host   string `json:"host"`
+	DBPath string `json:"dbpath"`
+	Web    struct {
+		Host string `json:"host"`
+		Port int    `json:"port"`
+	} `json:"web"`
 	Timeout         int64        `json:"timeout"`
-	Sync            bool         `json:"sync"`
 	Nodelist        []DBNodeInfo `json:"nodelist"`
 	Password        string       `json:"password"`
 	Port            int          `json:"port"`
@@ -32,8 +35,6 @@ type DBNodeInfo struct {
 	Id       string `json:"id"`
 	Password string `json:"password"`
 	Port     int    `json:"port"`
-	Weight   int    `json:"weight"`
-	Mode     string `json:"mode"`
 }
 
 type DBNode struct {

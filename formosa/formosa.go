@@ -8,15 +8,14 @@ import (
 )
 
 var (
-	Version      string = "0.0.1"
-	ConfigPath   string = "configs.json"
-	CONFIGS      Configs
-	modTime      time.Time
-	GlobalClient ServerClient
-	DM           DBManager
-	Binlogs      DBManager
-	memprofile   string = "mempprof.log"
-	memFile      *os.File
+	Version    string = "0.0.1"
+	ConfigPath string = "configs.json"
+	CONFIGS    Configs
+	modTime    time.Time
+	SyncClient ServerClient
+	DM         DBManager
+	memprofile string = "mempprof.log"
+	memFile    *os.File
 )
 
 func Run(path string) {
@@ -33,25 +32,16 @@ func Run(path string) {
 		useCPU = 1
 	}
 	runtime.GOMAXPROCS(useCPU)
-	DM.Construct("data")
-	Binlogs.Construct("meta")
+	DM.Construct(CONFIGS.DBPath)
+	SyncClient.Init()
 	go Listen(CONFIGS.Host, CONFIGS.Port)
 	go WebServer()
-	timeCounter := 0
-	timePrint := 240
-	if CONFIGS.Debug {
-		timePrint = 20
-	}
+	go ConfigWatcher()
+
+	//Main Goroutine for check other db status and db status
 	for {
-		configWatcher()
-		//one min ping mirror DBs
-		timeCounter++
-		if timeCounter%timePrint == 0 {
-			//GlobalClient.DBPool.CheckStatus()
-			//GlobalClient.DBPool.Status()
-			PrintGCSummary()
-			timeCounter = 0
-		}
-		time.Sleep(250 * time.Millisecond)
+		SyncClient.ServerPool.CheckStatus()
+		PrintGCSummary()
+		time.Sleep(60 * time.Second)
 	}
 }

@@ -16,14 +16,8 @@ func WebServer() {
 	r.HandleFunc("/status", StatusHandler)
 	http.Handle("/", r)
 	WsServer()
-	log.Println("Web Service starting.")
-	http.ListenAndServe(CONFIGS.Http, nil)
-
-	/*err = http.ListenAndServeTLS(":443","ssl/nxg.crt","ssl/nxg.key",nil)
-	if err != nil {
-		fmt.Println("ListenAndServeTLS:",err)
-		log.Fatal("ListenAndServeTLS:", err)
-	}*/
+	log.Println("Web Service started.")
+	http.ListenAndServe(fmt.Sprintf("%s:%d", CONFIGS.Web.Host, CONFIGS.Web.Port), nil)
 }
 
 func jsonParser(data interface{}, w http.ResponseWriter) {
