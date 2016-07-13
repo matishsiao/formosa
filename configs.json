@@ -2,25 +2,26 @@
   "debug":false,
   "host":"127.0.0.1",
   "port":4001,
-  "sync":false,
+  "dbpath":"data",
+  "web":{
+    "host":"127.0.0.1",
+    "port":8080
+  },
   "password":"defaultpassword",
   "timeout":120,
-  "mode":"mirror",
+  "limit":5,
   "nodelist":[
     {
       "id":"db2",
-      "host":"192.168.0.1",
-      "port":4001,
-      "password":"defaultpassword",
-      "mode":"mirror",
-      "weight":100
+      "host":"127.0.0.1",
+      "port":4002,
+      "password":"defaultpassword"
     },
     {
       "id":"db3",
-      "host":"192.168.0.2",
-      "port":4001,
-      "password":"defaultpassword",
-      "mode":"slave"
+      "host":"127.0.0.1",
+      "port":4003,
+      "password":"defaultpassword"
     }
     ]
 }
