@@ -315,9 +315,9 @@ using json format to configuration.
 #How to build
 
 ```
- go get github.com/matishsiao/formosa/
- cd $GOPATH/github.com/matishsiao/formosa
- go build
+ go get github.com/matishsiao/goformosa/
+ cd $GOPATH/github.com/matishsiao/goformosa
+ go build server.go
 ```
 
 #See more information?
