@@ -119,6 +119,47 @@ func (dm *DBManager) Scan(from string, to string, limit int64) ([]string, error)
 	return result, err
 }
 
+func (dm *DBManager) ReverseScan(from string, to string, limit int64) ([]string, error) {
+	var scanRange *util.Range
+	var result []string
+	if limit == 0 {
+		return result, fmt.Errorf("limit can't set zero")
+	}
+	fromKey := EncodeKV(from)
+	toKey := EncodeKV(to)
+	if to != "" {
+		scanRange = &util.Range{Start: []byte(fromKey), Limit: []byte(toKey)}
+	} else {
+		scanRange = &util.Range{Start: []byte(fromKey), Limit: []byte(DATATYPE_KV_END)}
+	}
+
+	iter := dm.DB.NewIterator(scanRange, nil)
+	if iter.Last() {
+		key := DecodeKV(string(iter.Key()))
+		result = append(result, key)
+		result = append(result, string(iter.Value()))
+		if limit != -1 {
+			limit--
+		}
+		if limit != 0 {
+			for iter.Prev() {
+				key := DecodeKV(string(iter.Key()))
+				result = append(result, key)
+				result = append(result, string(iter.Value()))
+				if limit != -1 {
+					limit--
+				}
+				if limit == 0 {
+					break
+				}
+			}
+		}
+	}
+	iter.Release()
+	err := iter.Error()
+	return result, err
+}
+
 func (dm *DBManager) Size() (int64, error) {
 	size, err := dm.DB.Get([]byte(DATATYPE_KV_END), nil)
 	return ToInt64(string(size)), err

@@ -21,7 +21,9 @@ version: 0.0.1
 		incr
 		exists
 		scan
+		rscan
 		size
+		getall
 		batchexec (using json format)
 		batchwrite (using json format)
 		hset
@@ -31,10 +33,12 @@ version: 0.0.1
 		hexists
 		hsize
 		hscan
-		zip
+		hrscan
+		hgetall
 		qpush
 		qpop
 		qsize
+		zip
 
 ## websocket
 
@@ -56,7 +60,7 @@ Command:auth
 Example:
 
 ```
-	client.Do("auth","defaultpassword")
+client.Do("auth","defaultpassword")
 ```
 
 Command:set
@@ -66,7 +70,7 @@ Command:set
 Example:
 
 ```
-	client.Do("set","key","value")
+client.Do("set","key","value")
 ```
 
 Command:get
@@ -76,7 +80,7 @@ Command:get
 Example:
 
 ```
-	client.Do("get","key")
+client.Do("get","key")
 ```
 
 Command:del
@@ -86,7 +90,7 @@ Command:del
 Example:
 
 ```
-	client.Do("del","key")
+client.Do("del","key")
 ```
 
 Command:incr
@@ -96,7 +100,7 @@ Command:incr
 Example:
 
 ```
-	client.Do("incr","key",1)
+client.Do("incr","key",1)
 ```
 
 Command:exists
@@ -106,7 +110,7 @@ Command:exists
 Example:
 
 ```
-	client.Do("exists","key")
+client.Do("exists","key")
 ```
 
 Command:scan
@@ -116,8 +120,29 @@ Command:scan
 Example:
 
 ```
-  //limit:-1 = no limit
-	client.Do("scan","from","to",limit)
+//limit:-1 = no limit
+client.Do("scan","from","to",limit)
+```
+
+Command:rscan
+
+	reverse scan KV data in range.
+
+Example:
+
+```
+//limit:-1 = no limit
+client.Do("rscan","from","to",limit)
+```
+
+Command:getall
+
+	get all in key value map.
+
+Example:
+
+```
+client.Do("getall")
 ```
 
 Command:size
@@ -127,7 +152,7 @@ Command:size
 Example:
 
 ```
-	client.Do("size")
+client.Do("size")
 ```
 
 Command:batchexec
@@ -141,7 +166,7 @@ Return:
 Example:
 
 ```
-	client.Do("batchexec","[[\"hset\",\"test\",\"1\",\"1\"],[\"hget\",\"test\",\"1\"]]")
+client.Do("batchexec","[[\"hset\",\"test\",\"1\",\"1\"],[\"hget\",\"test\",\"1\"]]")
 ```
 
 Command:batchwrite
@@ -152,7 +177,7 @@ Command:batchwrite
 Example:
 
 ```
-	client.Do("batchwrite","[[\"hset\",\"test\",\"1\",\"1\"],[\"set\",\"KV\",\"1\"]]")
+client.Do("batchwrite","[[\"hset\",\"test\",\"1\",\"1\"],[\"set\",\"KV\",\"1\"]]")
 ```
 
 Command:hset
@@ -163,7 +188,7 @@ Command:hset
 Example:
 
 ```
-	client.Do("hset","hash","key","value")
+client.Do("hset","hash","key","value")
 ```
 
 Command:hget
@@ -174,7 +199,7 @@ Command:hget
 Example:
 
 ```
-	client.Do("hget","hash","key")
+client.Do("hget","hash","key")
 ```
 
 Command:hdel
@@ -185,7 +210,7 @@ Command:hdel
 Example:
 
 ```
-	client.Do("hdel","hash","key")
+client.Do("hdel","hash","key")
 ```
 
 Command:hincr
@@ -196,7 +221,7 @@ Command:hincr
 Example:
 
 ```
-	client.Do("hincr","hash","key",1)
+client.Do("hincr","hash","key",1)
 ```
 
 Command:hexists
@@ -206,7 +231,7 @@ Command:hexists
 Example:
 
 ```
-	client.Do("hexists","hash","key")
+client.Do("hexists","hash","key")
 ```
 
 Command:hscan
@@ -216,8 +241,29 @@ Command:hscan
 Example:
 
 ```
-  //limit:-1 = no limit
-	client.Do("hscan","hash","from","to",limit)
+//limit:-1 = no limit
+client.Do("hscan","hashname","from","to",limit)
+```
+
+Command:hrscan
+
+	reverse scan hash KV data in range.
+
+Example:
+
+```
+//limit:-1 = no limit
+client.Do("hrscan","hashname","from","to",limit)
+```
+
+Command:hgetall
+
+	get all in one hash map.
+
+Example:
+
+```
+client.Do("hgetall")
 ```
 
 Command:hsize
@@ -227,20 +273,7 @@ Command:hsize
 Example:
 
 ```
-	client.Do("hsize","hash")
-```
-
-Command:zip
-
-	using gzip for transfer data. Save bandwidth resource.
-
-Example:
-
-```
-	//turn ON
-	client.Do("zip",1)
-	//turn OFF
-	client.Do("zip",0)
+client.Do("hsize","hash")
 ```
 
 Command:qpush
@@ -251,7 +284,7 @@ Command:qpush
 Example:
 
 ```
-	client.Do("qpush","queue","value")
+client.Do("qpush","queue","value")
 ```
 
 Command:qpop
@@ -262,7 +295,7 @@ Command:qpop
 Example:
 
 ```
-	client.Do("qpop","queue")
+client.Do("qpop","queue")
 ```
 
 Command:qsize
@@ -272,9 +305,21 @@ Command:qsize
 Example:
 
 ```
-	client.Do("qsize","queue")
+client.Do("qsize","queue")
 ```
 
+Command:zip
+
+	using gzip for transfer data. Save bandwidth resource.
+
+Example:
+
+```
+//turn ON
+client.Do("zip",1)
+//turn OFF
+client.Do("zip",0)
+```
 
 
 # Configuration

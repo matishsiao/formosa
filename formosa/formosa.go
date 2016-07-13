@@ -38,7 +38,7 @@ func Run(path string) {
 	go WebServer()
 	go ConfigWatcher()
 
-	//Main Goroutine for check other db status and db status
+	//Main Goroutine for check other db status and self db status
 	for {
 		SyncClient.ServerPool.CheckStatus()
 		PrintGCSummary()

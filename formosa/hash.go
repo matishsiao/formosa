@@ -2,7 +2,6 @@ package formosa
 
 import (
 	"fmt"
-	"log"
 
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
@@ -116,7 +115,6 @@ func (dm *DBManager) HashScan(hash string, from string, to string, limit int64) 
 
 	for iter.Next() {
 		key := DecodeHash(string(iter.Key()), hash)
-		log.Println(string(iter.Key()), string(iter.Value()))
 		result = append(result, key)
 		result = append(result, string(iter.Value()))
 		if limit != -1 {
@@ -125,6 +123,49 @@ func (dm *DBManager) HashScan(hash string, from string, to string, limit int64) 
 		if limit == 0 {
 			break
 		}
+	}
+	iter.Release()
+	err := iter.Error()
+	return result, err
+}
+
+func (dm *DBManager) HashReverseScan(hash string, from string, to string, limit int64) ([]string, error) {
+	var scanRange *util.Range
+	var result []string
+	if limit == 0 {
+		return result, fmt.Errorf("limit can't set zero")
+	}
+	fromKey := EncodeHash(hash, from)
+	endKey := EncodeHashEnd(hash)
+	toKey := EncodeHash(hash, to)
+	if to != "" {
+		scanRange = &util.Range{Start: []byte(fromKey), Limit: []byte(toKey)}
+	} else {
+		scanRange = &util.Range{Start: []byte(fromKey), Limit: []byte(endKey)}
+	}
+
+	iter := dm.DB.NewIterator(scanRange, nil)
+	if iter.Last() {
+		key := DecodeHash(string(iter.Key()), hash)
+		result = append(result, key)
+		result = append(result, string(iter.Value()))
+		if limit != -1 {
+			limit--
+		}
+		if limit != 0 {
+			for iter.Prev() {
+				key := DecodeHash(string(iter.Key()), hash)
+				result = append(result, key)
+				result = append(result, string(iter.Value()))
+				if limit != -1 {
+					limit--
+				}
+				if limit == 0 {
+					break
+				}
+			}
+		}
+
 	}
 	iter.Release()
 	err := iter.Error()

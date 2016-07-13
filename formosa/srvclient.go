@@ -347,13 +347,12 @@ func (cl *SrvClient) Query(args []string,sync bool) ([]string, error) {
 	errFlag := false
 	var errMsg error
 	if len(args) > 0 {
-		//log.Println("Args:", args, binlog.seq)
 		switch args[0] {
 		case "globalgetall":
 			if len(args) == 1 {
 				return DM.GlobalGetAll()
 			} else {
-				return response, fmt.Errorf("Args length not equl 2.")
+				return response, fmt.Errorf("Args length not equl 1.")
 			}
 		case "hset":
 			if len(args) == 4 {
@@ -418,6 +417,18 @@ func (cl *SrvClient) Query(args []string,sync bool) ([]string, error) {
 			} else {
 				return response, fmt.Errorf("Args length not equl 5.")
 			}
+		case "hrscan":
+			if len(args) == 5 {
+				return DM.HashReverseScan(args[1], args[2], args[3], ToInt64(args[4]))
+			} else {
+				return response, fmt.Errorf("Args length not equl 5.")
+			}
+		case "hgetall":
+			if len(args) == 2 {
+				return DM.HashScan(args[1], "", "", -1)
+			} else {
+				return response, fmt.Errorf("Args length not equl 2.")
+			}
 		case "hexists":
 			if len(args) == 3 {
 				data, err := DM.HashExists(args[1], args[2])
@@ -456,6 +467,18 @@ func (cl *SrvClient) Query(args []string,sync bool) ([]string, error) {
 				return DM.Scan(args[1], args[2], ToInt64(args[3]))
 			} else {
 				return response, fmt.Errorf("Args length not equl 4.")
+			}
+		case "rscan":
+			if len(args) == 4 {
+				return DM.ReverseScan(args[1], args[2], ToInt64(args[3]))
+			} else {
+				return response, fmt.Errorf("Args length not equl 4.")
+			}
+		case "getall":
+			if len(args) == 1 {
+				return DM.Scan("", "", -1)
+			} else {
+				return response, fmt.Errorf("Args length not equl 1.")
 			}
 		case "set":
 			if len(args) == 3 {
