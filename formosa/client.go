@@ -33,6 +33,7 @@ type Client struct {
 	Closed    bool
 	init      bool
 	debug     bool
+	Zip       bool
 }
 
 type ClientResult struct {
@@ -117,6 +118,11 @@ func (c *Client) Connect() error {
 
 func (c *Client) KeepAlive() {
 	go c.HealthCheck()
+}
+
+func (c *Client) UseZip(flag bool) {
+	c.Zip = flag
+	log.Println("Formosa Client Zip Mode:", c.Zip)
 }
 
 func (c *Client) HealthCheck() {
@@ -243,7 +249,7 @@ func (c *Client) Exec() ([][]string, error) {
 
 func (c *Client) do(args []interface{}) ([]string, error) {
 	if c.Connected {
-		err := c.send(args)
+		err := c.Send(args)
 		if err != nil {
 			if c.debug {
 				log.Printf("Formosa Client[%s] Do Send Error:%v Data:%v\n", c.Id, err, args)
@@ -408,51 +414,104 @@ func (c *Client) HashScan(hash string, start string, end string, limit int) (map
 	return nil, nil
 }
 
-func (c *Client) Send(args ...interface{}) error {
-	return c.send(args)
-}
-
-func (c *Client) send(args []interface{}) error {
+func (c *Client) Send(args []interface{}) error {
 	var buf bytes.Buffer
-	for _, arg := range args {
-		var s string
-		switch arg := arg.(type) {
-		case string:
-			s = arg
-		case []byte:
-			s = string(arg)
-		case []string:
-			for _, s := range arg {
-				buf.WriteString(fmt.Sprintf("%d", len(s)))
-				buf.WriteByte('\n')
-				buf.WriteString(s)
-				buf.WriteByte('\n')
-			}
-			continue
-		case int:
-			s = fmt.Sprintf("%d", arg)
-		case int64:
-			s = fmt.Sprintf("%d", arg)
-		case float64:
-			s = fmt.Sprintf("%f", arg)
-		case bool:
-			if arg {
-				s = "1"
-			} else {
-				s = "0"
-			}
-		case nil:
-			s = ""
-		default:
-			return fmt.Errorf("bad arguments")
-		}
-		buf.WriteString(fmt.Sprintf("%d", len(s)))
+	if c.Zip {
+		buf.WriteString("3")
 		buf.WriteByte('\n')
-		buf.WriteString(s)
+		buf.WriteString("zip")
+		buf.WriteByte('\n')
+		var zipbuf bytes.Buffer
+		w := gzip.NewWriter(&zipbuf)
+		for _, arg := range args {
+			var s string
+			switch arg := arg.(type) {
+			case string:
+				s = arg
+			case []byte:
+				s = string(arg)
+			case []string:
+				for _, s := range arg {
+					w.Write([]byte(fmt.Sprintf("%d", len(s))))
+					w.Write([]byte("\n"))
+					w.Write([]byte(s))
+					w.Write([]byte("\n"))
+				}
+				continue
+			case int:
+				s = fmt.Sprintf("%d", arg)
+			case int64:
+				s = fmt.Sprintf("%d", arg)
+			case float64:
+				s = fmt.Sprintf("%f", arg)
+			case bool:
+				if arg {
+					s = "1"
+				} else {
+					s = "0"
+				}
+			case nil:
+				s = ""
+			default:
+				return fmt.Errorf("bad arguments")
+			}
+			w.Write([]byte(fmt.Sprintf("%d", len(s))))
+			w.Write([]byte("\n"))
+			w.Write([]byte(s))
+			w.Write([]byte("\n"))
+		}
+		w.Close()
+		zipbuff := base64.StdEncoding.EncodeToString(zipbuf.Bytes())
+		buf.WriteString(fmt.Sprintf("%d", len(zipbuff)))
+		buf.WriteByte('\n')
+		buf.WriteString(zipbuff)
+		buf.WriteByte('\n')
+		buf.WriteByte('\n')
+	} else {
+		for _, arg := range args {
+			var s string
+			switch arg := arg.(type) {
+			case string:
+				s = arg
+			case []byte:
+				s = string(arg)
+			case []string:
+				for _, s := range arg {
+					buf.WriteString(fmt.Sprintf("%d", len(s)))
+					buf.WriteByte('\n')
+					_, err := buf.WriteString(s)
+					if err != nil {
+						log.Println("Write String Error:", err)
+					}
+					buf.WriteByte('\n')
+				}
+				continue
+			case int:
+				s = fmt.Sprintf("%d", arg)
+			case int64:
+				s = fmt.Sprintf("%d", arg)
+			case float64:
+				s = fmt.Sprintf("%f", arg)
+			case bool:
+				if arg {
+					s = "1"
+				} else {
+					s = "0"
+				}
+			case nil:
+				s = ""
+			default:
+				return fmt.Errorf("bad arguments")
+			}
+			buf.WriteString(fmt.Sprintf("%d", len(s)))
+			buf.WriteByte('\n')
+			buf.WriteString(s)
+			buf.WriteByte('\n')
+		}
 		buf.WriteByte('\n')
 	}
-	buf.WriteByte('\n')
-	_, err := c.sock.Write(buf.Bytes())
+	tmpBuf := buf.Bytes()
+	_, err := c.sock.Write(tmpBuf)
 	return err
 }
 
