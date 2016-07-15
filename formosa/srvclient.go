@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	_ "io"
+	"io/ioutil"
 	"log"
 	"net"
 	_ "runtime"
@@ -88,98 +89,56 @@ func (cl *SrvClient) Read() {
 }
 
 func (cl *SrvClient) SyncProcess(req []string) {
-	if len(req) == 0 {
-		//ok, not_found, error, fail, client_error
-		cl.Send([]string{"error", "request format incorrect."}, false)
-	} else {
-		req = req[1:]
-		switch req[0] {
-		case "batchexec":
-			if len(req) == 2 {
-					var cmdlist [][]string
-					err := ffjson.Unmarshal([]byte(req[1]), &cmdlist)
-					if err != nil {
-						cl.Send([]string{"fail", "batchexec need use json format."}, false)
-						return
-					}
-					var resultlist [][]string
-					async := false
-					if len(cmdlist) > 0 && len(cmdlist[0]) >= 1 && cmdlist[0][0] == "async" {
-						async = true
-						cl.Send([]string{"ok", "batchexec use async mode."}, false)
-					}
-					//err = DM.Batch(cmdlist)
-					for _, v := range cmdlist {
-						res, err := cl.Query(v,false)
-						if err != nil {
-							resultlist = append(resultlist, []string{"error", err.Error()})
-							continue
-						}
-						if res == nil {
-							resultlist = append(resultlist, []string{"not_found"})
-							continue
-						}
-						resultlist = append(resultlist, res)
-					}
-					if !async {
-						resultjson, err := ffjson.Marshal(resultlist)
-						if err != nil {
-							cl.Send([]string{"fail", "batchexec send json result failed." + err.Error()}, false)
-							return
-						}
-						res := []string{"ok", string(resultjson)}
-						if cl.Zip {
-							cl.Send(res, true)
-						} else {
-							cl.Send(res, false)
-						}
-					}
-			}
-		case "batchwrite":
-			if len(req) == 2 {
-					var cmdlist [][]string
-					err := ffjson.Unmarshal([]byte(req[1]), &cmdlist)
-					if err != nil {
-						cl.Send([]string{"fail", "batchwrite need use json format."}, false)
-						return
-					}
-					async := false
-					if len(cmdlist) > 0 && len(cmdlist[0]) >= 1 && cmdlist[0][0] == "async" {
-						async = true
-						cl.Send([]string{"ok", "batchwrite use async mode."}, false)
-					}
-					err = DM.Batch(cmdlist)
-					if !async {
-						var res []string
-						if err != nil {
-							res = []string{"fail", err.Error()}
-						} else {
-							res = []string{"ok", "1"}
-						}
-						if cl.Zip {
-							cl.Send(res, true)
-						} else {
-							cl.Send(res, false)
-						}
-					}
-			}
-		default:
-			res, err := cl.Query(req,false)
+	req = req[1:]
+	switch req[0] {
+	case "batchexec":
+		if len(req) == 2 {
+			var cmdlist [][]string
+			err := ffjson.Unmarshal([]byte(req[1]), &cmdlist)
 			if err != nil {
-				cl.Send([]string{"error", err.Error()}, false)
+				log.Printf("sync batchexec error:%v args:%v\n", err.Error(), req[1])
 				return
 			}
-			if res == nil {
-				cl.Send([]string{"not_found"}, false)
-				return
-			} else {
-				if cl.Zip {
-					cl.Send(res, true)
-				} else {
-					cl.Send(res, false)
+			for _, v := range cmdlist {
+				_, err := cl.Query(v, false)
+				if err != nil {
+					log.Printf("sync batchexec error:%v args:%v\n", err.Error(), v)
+					continue
 				}
+			}
+			if CONFIGS.Debug {
+				log.Printf("sync batchexec success. args:%v\n", req)
+			}
+		} else {
+			log.Printf("sync batchexec failed. args length incorrect.\n")
+		}
+	case "batchwrite":
+		if len(req) == 2 {
+			var cmdlist [][]string
+			err := ffjson.Unmarshal([]byte(req[1]), &cmdlist)
+			if err != nil {
+				log.Printf("sync batchwrite error:%v args:%v\n", err.Error(), req[1])
 				return
 			}
+			err = DM.Batch(cmdlist)
+			if err != nil {
+				log.Printf("sync batchwrite error:%v\n", err.Error())
+				return
+			}
+			if CONFIGS.Debug {
+				log.Printf("sync batchwrite success. args:%v\n", req)
+			}
+		} else {
+			log.Printf("sync batchwrite failed. args length incorrect.\n")
+		}
+	default:
+		_, err := cl.Query(req, false)
+		if err != nil {
+			log.Printf("sync query error:%v args:%v\n", err.Error(), req)
+			return
+		}
+		if CONFIGS.Debug {
+			log.Printf("sync query success. args:%v\n", req)
 		}
 	}
 }
@@ -210,6 +169,7 @@ func (cl *SrvClient) Process(req []string) {
 			cl.Send([]string{"ok", "1"}, false)
 		case "sync":
 			if cl.Auth {
+				cl.Send([]string{"ok", "1"}, false)
 				cl.SyncProcess(req)
 			}
 		case "batchexec":
@@ -229,7 +189,7 @@ func (cl *SrvClient) Process(req []string) {
 					}
 					//err = DM.Batch(cmdlist)
 					for _, v := range cmdlist {
-						res, err := cl.Query(v,true)
+						res, err := cl.Query(v, true)
 						if err != nil {
 							resultlist = append(resultlist, []string{"error", err.Error()})
 							continue
@@ -305,7 +265,7 @@ func (cl *SrvClient) Process(req []string) {
 			}
 		default:
 			if cl.Auth {
-				res, err := cl.Query(req,true)
+				res, err := cl.Query(req, true)
 				if err != nil {
 					cl.Send([]string{"error", err.Error()}, false)
 					return
@@ -332,7 +292,7 @@ func (cl *SrvClient) Process(req []string) {
 	}
 }
 
-func (cl *SrvClient) Query(args []string,sync bool) ([]string, error) {
+func (cl *SrvClient) Query(args []string, sync bool) ([]string, error) {
 	find := false
 	if CONFIGS.Debug {
 		log.Println("Query:", args)
@@ -348,6 +308,18 @@ func (cl *SrvClient) Query(args []string,sync bool) ([]string, error) {
 	var errMsg error
 	if len(args) > 0 {
 		switch args[0] {
+		case "servers":
+			if len(args) == 1 {
+				response = append(response, "list")
+				nodelist, err := ffjson.Marshal(CONFIGS.Nodelist)
+				if err != nil {
+					return response, err
+				}
+				response = append(response, string(nodelist))
+				return response, nil
+			} else {
+				return response, fmt.Errorf("Args length not equl 1.")
+			}
 		case "globalgetall":
 			if len(args) == 1 {
 				return DM.GlobalGetAll()
@@ -356,14 +328,18 @@ func (cl *SrvClient) Query(args []string,sync bool) ([]string, error) {
 			}
 		case "hset":
 			if len(args) == 4 {
-				err := DM.HashSet(args[1], args[2], args[3])
+				update, err := DM.HashSet(args[1], args[2], args[3])
 				if err != nil {
 					return response, err
 				} else {
 					response = append(response, "ok")
-					response = append(response, "1")
-					if sync {
-						SyncClient.Append(args)
+					if update {
+						response = append(response, "1")
+						if sync {
+							SyncClient.Append(args)
+						}
+					} else {
+						response = append(response, "0")
 					}
 					return response, err
 				}
@@ -372,13 +348,18 @@ func (cl *SrvClient) Query(args []string,sync bool) ([]string, error) {
 			}
 		case "hdel":
 			if len(args) == 3 {
-				err := DM.HashDel(args[1], args[2])
+				update, err := DM.HashDel(args[1], args[2])
 				if err != nil {
 					return response, err
 				} else {
 					response = append(response, "ok")
-					if sync {
-						SyncClient.Append(args)
+					if update {
+						response = append(response, "1")
+						if sync {
+							SyncClient.Append(args)
+						}
+					} else {
+						response = append(response, "0")
 					}
 					return response, err
 				}
@@ -428,6 +409,18 @@ func (cl *SrvClient) Query(args []string,sync bool) ([]string, error) {
 				return DM.HashScan(args[1], "", "", -1)
 			} else {
 				return response, fmt.Errorf("Args length not equl 2.")
+			}
+		case "hlist":
+			if len(args) == 4 {
+				return DM.HashList(args[1], args[2], ToInt64(args[3]))
+			} else {
+				return response, fmt.Errorf("Args length not equl 4.")
+			}
+		case "hrlist":
+			if len(args) == 4 {
+				return DM.HashReverseList(args[1], args[2], ToInt64(args[3]))
+			} else {
+				return response, fmt.Errorf("Args length not equl 4.")
 			}
 		case "hexists":
 			if len(args) == 3 {
@@ -482,14 +475,18 @@ func (cl *SrvClient) Query(args []string,sync bool) ([]string, error) {
 			}
 		case "set":
 			if len(args) == 3 {
-				err := DM.Set(args[1], args[2])
+				update, err := DM.Set(args[1], args[2])
 				if err != nil {
 					return response, err
 				} else {
 					response = append(response, "ok")
-					response = append(response, "1")
-					if sync {
-						SyncClient.Append(args)
+					if update {
+						response = append(response, "1")
+						if sync {
+							SyncClient.Append(args)
+						}
+					} else {
+						response = append(response, "0")
 					}
 					return response, err
 				}
@@ -498,13 +495,18 @@ func (cl *SrvClient) Query(args []string,sync bool) ([]string, error) {
 			}
 		case "del":
 			if len(args) == 2 {
-				err := DM.Del(args[1])
+				update, err := DM.Del(args[1])
 				if err != nil {
 					return response, err
 				} else {
 					response = append(response, "ok")
-					if sync {
-						SyncClient.Append(args)
+					if update {
+						response = append(response, "1")
+						if sync {
+							SyncClient.Append(args)
+						}
+					} else {
+						response = append(response, "0")
 					}
 					return response, err
 				}
@@ -905,9 +907,16 @@ func (cl *SrvClient) recv() ([]string, error) {
 	for {
 		resp := cl.parse()
 		if resp == nil || len(resp) > 0 {
+			if len(resp) > 0 && resp[0] == "zip" {
+				zipData, err := base64.StdEncoding.DecodeString(resp[1])
+				if err != nil {
+					return nil, err
+				}
+				resp = cl.UnZip(zipData)
+			}
 			return resp, nil
 		}
-		n, err := cl.Conn.Read(tmp)
+		n, err := cl.Conn.Read(tmp[0:])
 		if err != nil {
 			return nil, err
 		}
@@ -952,6 +961,49 @@ func (cl *SrvClient) parse() []string {
 		offset += size + 1
 	}
 
-	//fmt.Printf("buf.size: %d packet not ready...\n", len(buf))
 	return []string{}
+}
+
+func (cl *SrvClient) UnZip(data []byte) []string {
+	var buf bytes.Buffer
+	buf.Write(data)
+	zipReader, err := gzip.NewReader(&buf)
+	if err != nil {
+		log.Println("[ERROR] New gzip reader:", err)
+	}
+	defer zipReader.Close()
+
+	zipData, err := ioutil.ReadAll(zipReader)
+	if err != nil {
+		fmt.Println("[ERROR] ReadAll:", err)
+		return nil
+	}
+	var resp []string
+
+	if zipData != nil {
+		Idx := 0
+		offset := 0
+		hiIdx := 0
+		for {
+			Idx = bytes.IndexByte(zipData, '\n')
+			if Idx == -1 {
+				break
+			}
+			p := string(zipData[:Idx])
+			//fmt.Println("p:[",p,"]\n")
+			size, err := strconv.Atoi(string(p))
+			if err != nil || size < 0 {
+				zipData = zipData[Idx+1:]
+				continue
+			} else {
+				offset = Idx + 1 + size
+				hiIdx = size + Idx + 1
+				resp = append(resp, string(zipData[Idx+1:hiIdx]))
+				//fmt.Printf("data:[%s] size:%d Idx:%d\n",str,size,Idx+1)
+				zipData = zipData[offset:]
+			}
+
+		}
+	}
+	return resp
 }

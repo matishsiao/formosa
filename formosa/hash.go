@@ -6,42 +6,76 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
-func (dm *DBManager) HashSet(hash string, key string, value string) error {
+func (dm *DBManager) HashSet(hash string, key string, value string) (bool, error) {
 	enKey := EncodeHash(hash, key)
 	exists, _ := dm.DB.Has([]byte(enKey), nil)
+	transaction, err := dm.DB.OpenTransaction()
+	if err != nil {
+		return false, err
+	}
+	commit := false
 	if !exists {
 		endKey := EncodeHashEnd(hash)
-		data, _ := dm.DB.Get([]byte(endKey), nil)
+		data, _ := transaction.Get([]byte(endKey), nil)
 		if len(data) == 0 {
-			dm.DB.Put([]byte(endKey), []byte("1"), nil)
+			transaction.Put([]byte(endKey), []byte("1"), nil)
 		} else {
 			size := ToInt64(string(data))
 			size++
-			dm.DB.Put([]byte(endKey), []byte(fmt.Sprintf("%d", size)), nil)
+			transaction.Put([]byte(endKey), []byte(fmt.Sprintf("%d", size)), nil)
+		}
+		commit = true
+	} else {
+		data, _ := dm.HashGet(hash, key)
+		if string(data) != value {
+			commit = true
 		}
 	}
-	return dm.DB.Put([]byte(enKey), []byte(value), nil)
+
+	if commit {
+		transaction.Put([]byte(enKey), []byte(value), nil)
+		err = transaction.Commit()
+		dm.HashNameSet(hash)
+		return true, err
+	} else {
+		transaction.Discard()
+		return false, nil
+	}
 }
 
-func (dm *DBManager) HashDel(hash string, key string) error {
+func (dm *DBManager) HashNameSet(hash string) {
+	enKey := EncodeHashName(hash)
+	exists, _ := dm.DB.Has([]byte(enKey), nil)
+	if !exists {
+		dm.DB.Put([]byte(enKey), []byte("1"), nil)
+	}
+}
+
+func (dm *DBManager) HashDel(hash string, key string) (bool, error) {
 	enKey := EncodeHash(hash, key)
 	exists, _ := dm.DB.Has([]byte(enKey), nil)
 	if !exists {
-		return nil
+		return false, nil
 	}
 	endKey := EncodeHashEnd(hash)
-	data, _ := dm.DB.Get([]byte(endKey), nil)
+	transaction, err := dm.DB.OpenTransaction()
+	if err != nil {
+		return false, err
+	}
+	data, _ := transaction.Get([]byte(endKey), nil)
 	if len(data) == 0 {
-		dm.DB.Put([]byte(endKey), []byte("0"), nil)
+		transaction.Put([]byte(endKey), []byte("0"), nil)
 	} else {
 		size := ToInt64(string(data))
 		size--
 		if size <= 0 {
 			size = 0
 		}
-		dm.DB.Put([]byte(endKey), []byte(fmt.Sprintf("%d", size)), nil)
+		transaction.Put([]byte(endKey), []byte(fmt.Sprintf("%d", size)), nil)
 	}
-	return dm.DB.Delete([]byte(enKey), nil)
+	transaction.Delete([]byte(enKey), nil)
+	err = transaction.Commit()
+	return true, err
 }
 
 func (dm *DBManager) HashIncr(hash string, key string, value string) (string, error) {
@@ -167,6 +201,75 @@ func (dm *DBManager) HashReverseScan(hash string, from string, to string, limit 
 		}
 
 	}
+	iter.Release()
+	err := iter.Error()
+	return result, err
+}
+
+func (dm *DBManager) HashList(from string, to string, limit int64) ([]string, error) {
+	var scanRange *util.Range
+	var result []string
+	if limit == 0 {
+		return result, fmt.Errorf("limit can't set zero")
+	}
+	fromKey := EncodeHashName(from)
+	if to != "" {
+		scanRange = &util.Range{Start: []byte(fromKey), Limit: []byte(EncodeHashName(to))}
+	} else {
+		scanRange = &util.Range{Start: []byte(fromKey), Limit: []byte(DATATYPE_HASH_LIST_END)}
+	}
+
+	iter := dm.DB.NewIterator(scanRange, nil)
+
+	for iter.Next() {
+		key := DecodeHashName(string(iter.Key()))
+		result = append(result, key)
+		if limit != -1 {
+			limit--
+		}
+		if limit == 0 {
+			break
+		}
+	}
+	iter.Release()
+	err := iter.Error()
+	return result, err
+}
+
+func (dm *DBManager) HashReverseList(from string, to string, limit int64) ([]string, error) {
+	var scanRange *util.Range
+	var result []string
+	if limit == 0 {
+		return result, fmt.Errorf("limit can't set zero")
+	}
+	fromKey := EncodeHashName(from)
+	if to != "" {
+		scanRange = &util.Range{Start: []byte(fromKey), Limit: []byte(EncodeHashName(to))}
+	} else {
+		scanRange = &util.Range{Start: []byte(fromKey), Limit: []byte(DATATYPE_HASH_LIST_END)}
+	}
+
+	iter := dm.DB.NewIterator(scanRange, nil)
+	if iter.Last() {
+		key := DecodeHashName(string(iter.Key()))
+		result = append(result, key)
+		if limit != -1 {
+			limit--
+		}
+		if limit != 0 {
+			for iter.Prev() {
+				key := DecodeHashName(string(iter.Key()))
+				result = append(result, key)
+				if limit != -1 {
+					limit--
+				}
+				if limit == 0 {
+					break
+				}
+			}
+		}
+	}
+
 	iter.Release()
 	err := iter.Error()
 	return result, err

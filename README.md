@@ -34,11 +34,14 @@ version: 0.0.1
 		hsize
 		hscan
 		hrscan
+		hlist
+		hrlist
 		hgetall
 		qpush
 		qpop
 		qsize
 		zip
+		servers
 
 ## websocket
 
@@ -256,6 +259,28 @@ Example:
 client.Do("hrscan","hashname","from","to",limit)
 ```
 
+Command:hlist
+
+	scan hash map name in range.
+
+Example:
+
+```
+//limit:-1 = no limit
+client.Do("hlist","from","to",limit)
+```
+
+Command:hrlist
+
+	reverse scan hash map name in range.
+
+Example:
+
+```
+//limit:-1 = no limit
+client.Do("hrlist","from","to",limit)
+```
+
 Command:hgetall
 
 	get all in one hash map.
@@ -319,6 +344,17 @@ Example:
 client.Do("zip",1)
 //turn OFF
 client.Do("zip",0)
+```
+
+
+Command:servers
+
+	return this server node list, you can use it for HA.
+
+Example:
+
+```
+client.Do("servers")
 ```
 
 

@@ -6,8 +6,11 @@ import (
 	"github.com/matishsiao/formosa/client/go/formosa"
 )
 
-const DATATYPE_BINLOG string = "B"
+const DATATYPE_SYNC string = "S"
+const DATATYPE_SYNC_SEQ string = "OptSeq"
 const DATATYPE_HASH string = "H"
+const DATATYPE_HASH_LIST string = "HN"
+const DATATYPE_HASH_LIST_END string = "HN#"
 const DATATYPE_KV string = "K"
 const DATATYPE_KV_END string = "K#"
 const DATATYPE_QUEUE string = "Q"

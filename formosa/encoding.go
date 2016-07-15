@@ -4,12 +4,8 @@ import (
 	"fmt"
 )
 
-func EncodeBinlog(key string) string {
-	return fmt.Sprintf("%s!%s", DATATYPE_BINLOG, key)
-}
-
-func EncodeBinlogNode(node string) string {
-	return fmt.Sprintf("%s%s!", DATATYPE_BINLOG, node)
+func EncodeSync(key string) string {
+	return fmt.Sprintf("%s!%s", DATATYPE_SYNC, key)
 }
 
 func EncodeHash(hash string, key string) string {
@@ -26,6 +22,18 @@ func DecodeHash(enkey string, hash string) string {
 			return ""
 		}
 		enkey = enkey[2+len(hash):]
+		return enkey
+	}
+	return ""
+}
+
+func EncodeHashName(hash string) string {
+	return fmt.Sprintf("%s!%s", DATATYPE_HASH_LIST, hash)
+}
+
+func DecodeHashName(enkey string) string {
+	if len(enkey) >= 3 {
+		enkey = enkey[3:]
 		return enkey
 	}
 	return ""

@@ -7,40 +7,65 @@ import (
 )
 
 //KV
-func (dm *DBManager) Set(key string, value string) error {
+func (dm *DBManager) Set(key string, value string) (bool, error) {
 	enKey := EncodeKV(key)
 	exists, _ := dm.DB.Has([]byte(enKey), nil)
+	transaction, err := dm.DB.OpenTransaction()
+	if err != nil {
+		return false, err
+	}
+	commit := false
 	if !exists {
-		data, _ := dm.DB.Get([]byte(DATATYPE_KV_END), nil)
+		data, _ := transaction.Get([]byte(DATATYPE_KV_END), nil)
 		if len(data) == 0 {
-			dm.DB.Put([]byte(DATATYPE_KV_END), []byte("1"), nil)
+			transaction.Put([]byte(DATATYPE_KV_END), []byte("1"), nil)
 		} else {
 			size := ToInt64(string(data))
 			size++
-			dm.DB.Put([]byte(DATATYPE_KV_END), []byte(fmt.Sprintf("%d", size)), nil)
+			transaction.Put([]byte(DATATYPE_KV_END), []byte(fmt.Sprintf("%d", size)), nil)
+		}
+		commit = true
+	} else {
+		data, _ := dm.Get(key)
+		if string(data) != value {
+			commit = true
 		}
 	}
-	return dm.DB.Put([]byte(enKey), []byte(value), nil)
+
+	if commit {
+		transaction.Put([]byte(enKey), []byte(value), nil)
+		err = transaction.Commit()
+		return true, err
+	} else {
+		transaction.Discard()
+		return false, nil
+	}
 }
 
-func (dm *DBManager) Del(key string) error {
+func (dm *DBManager) Del(key string) (bool, error) {
 	enKey := EncodeKV(key)
 	exists, _ := dm.DB.Has([]byte(enKey), nil)
 	if !exists {
-		return nil
+		return false, nil
 	}
-	data, _ := dm.DB.Get([]byte(DATATYPE_KV_END), nil)
+	transaction, err := dm.DB.OpenTransaction()
+	if err != nil {
+		return false, err
+	}
+	data, _ := transaction.Get([]byte(DATATYPE_KV_END), nil)
 	if len(data) == 0 {
-		dm.DB.Put([]byte(DATATYPE_KV_END), []byte("0"), nil)
+		transaction.Put([]byte(DATATYPE_KV_END), []byte("0"), nil)
 	} else {
 		size := ToInt64(string(data))
 		size--
 		if size <= 0 {
 			size = 0
 		}
-		dm.DB.Put([]byte(DATATYPE_KV_END), []byte(fmt.Sprintf("%d", size)), nil)
+		transaction.Put([]byte(DATATYPE_KV_END), []byte(fmt.Sprintf("%d", size)), nil)
 	}
-	return dm.DB.Delete([]byte(enKey), nil)
+	transaction.Delete([]byte(enKey), nil)
+	err = transaction.Commit()
+	return true, err
 }
 
 func (dm *DBManager) Get(key string) ([]byte, error) {
