@@ -181,8 +181,10 @@ func (scp *ServerConnectionPool) ConnectToDB(name string, v DBNodeInfo) {
 		if err != nil {
 			log.Printf("Connect to %s:%d Error:%v\n", v.Host, v.Port, err)
 		}
-
 		//default use zip transfered data
+		//Send use zip
+		db.UseZip(true)
+		//Receive use zip
 		db.Do("zip", 1)
 		scp.Pool[name] = append(scp.Pool[name], ServerConnection{Client: db, Info: v, Mu: &sync.Mutex{}})
 	}
@@ -256,7 +258,7 @@ type ServerConnection struct {
 func (sc *ServerConnection) Run(args []string) error {
 	var err error
 	run_args := []string{"sync"}
-	run_args = append(run_args,args...)
+	run_args = append(run_args, args...)
 	db := sc.Client
 	sc.Mu.Lock()
 	sc.InUse = true
